@@ -1,0 +1,217 @@
+{% extends "layouts/module_admin.html" %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="/admin/MCPServer">MCP Server</a></li>
+{% endblock %}
+
+{% block module %}
+<div class="container-fluid">
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-4 p-lg-5">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h4 class="mb-0">MCP Server</h4>
+      </div>
+
+      <div class="alert alert-info py-2 px-3 mb-4" role="alert">
+        Endpoint: <code>{{ endpoint }}</code>
+      </div>
+
+      <div class="alert alert-warning py-3 px-3 mb-4" role="alert">
+        <strong>Disclaimer:</strong> MCP Server is provided as-is, without warranties.
+        Before enabling write/manage permissions or running automation scenarios, create and verify backups
+        (database, configuration, and critical plugin data).
+      </div>
+
+      <form method="post">
+        <div class="row g-4">
+          <div class="col-12 col-xl-7">
+            <div class="border rounded-3 p-3 h-100">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <h6 class="mb-0">Access</h6>
+                {% if auth_enabled %}
+                  <span class="badge bg-success">Auth enabled</span>
+                {% else %}
+                  <span class="badge bg-warning text-dark">Auth disabled</span>
+                {% endif %}
+              </div>
+
+              <label for="auth_token" class="form-label">Auth token (Bearer / X-MCP-Token)</label>
+              <input
+                type="password"
+                class="form-control"
+                id="auth_token"
+                name="auth_token"
+                value=""
+                autocomplete="new-password"
+                placeholder="{% if auth_enabled %}Token is configured. Leave empty to keep it.{% else %}Set a token to enable authentication.{% endif %}"
+              >
+              <div class="form-text">
+                Empty field keeps current token unchanged.
+              </div>
+
+              <div class="form-check mt-3">
+                <input class="form-check-input" type="checkbox" id="clear_auth_token" name="clear_auth_token">
+                <label class="form-check-label" for="clear_auth_token">
+                  Clear token (block all MCP access until a new token is set)
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-xl-5">
+            <div class="border rounded-3 p-3 h-100">
+              <h6 class="mb-3">Limits</h6>
+              <label for="max_list_items" class="form-label">Max list items</label>
+              <input
+                type="number"
+                class="form-control"
+                id="max_list_items"
+                name="max_list_items"
+                min="1"
+                max="5000"
+                value="{{ max_list_items }}"
+              >
+              <div class="form-text">Applied to list endpoints and resources.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border rounded-3 p-3 mt-4">
+          <h6 class="mb-3">Operational permissions</h6>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="allow_write_tools" name="allow_write_tools" {% if allow_write_tools %}checked{% endif %}>
+            <label class="form-check-label" for="allow_write_tools">
+              Allow write tool: <code>osys_set_property</code>
+            </label>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="allow_method_calls" name="allow_method_calls" {% if allow_method_calls %}checked{% endif %}>
+            <label class="form-check-label" for="allow_method_calls">
+              Allow method calls: <code>osys_call_method</code>
+            </label>
+          </div>
+
+          <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="allow_logs_access" name="allow_logs_access" {% if allow_logs_access %}checked{% endif %}>
+            <label class="form-check-label" for="allow_logs_access">
+              Allow logs access (contains sensitive data): <code>osys_list_logs</code>, <code>osys_read_log</code>
+            </label>
+          </div>
+        </div>
+
+        <div class="border rounded-3 p-3 mt-4">
+          <h6 class="mb-3">Advanced management permissions</h6>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="allow_class_introspection" name="allow_class_introspection" {% if allow_class_introspection %}checked{% endif %}>
+            <label class="form-check-label" for="allow_class_introspection">
+              Class introspection (read-only): <code>osys_get_class</code>, <code>osys_list_classes</code>, <code>osys_get_class_full</code>
+            </label>
+          </div>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="allow_manage_classes" name="allow_manage_classes" {% if allow_manage_classes %}checked{% endif %}>
+            <label class="form-check-label" for="allow_manage_classes">
+              Class management (write): <code>osys_add_class</code>, <code>osys_update_class</code>, <code>osys_delete_class</code>
+            </label>
+          </div>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="allow_manage_objects" name="allow_manage_objects" {% if allow_manage_objects %}checked{% endif %}>
+            <label class="form-check-label" for="allow_manage_objects">
+              Object tools: <code>osys_add_object</code>, <code>osys_update_object</code>, <code>osys_delete_object</code>
+            </label>
+          </div>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="allow_manage_properties" name="allow_manage_properties" {% if allow_manage_properties %}checked{% endif %}>
+            <label class="form-check-label" for="allow_manage_properties">
+              Property tools: <code>osys_add_class_property</code>, <code>osys_add_object_property</code>, <code>osys_delete_object_property</code>
+            </label>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="allow_manage_methods" name="allow_manage_methods" {% if allow_manage_methods %}checked{% endif %}>
+            <label class="form-check-label" for="allow_manage_methods">
+              Method tools: <code>osys_add_class_method</code>, <code>osys_add_object_method</code>, <code>osys_validate_method_code</code>, <code>osys_run_method_dry</code>
+            </label>
+          </div>
+        </div>
+
+        <div class="border rounded-3 p-3 mt-4">
+          <h6 class="mb-3">Documentation tools</h6>
+          {% if docs_available %}
+            <div class="alert alert-success py-2 px-3 mb-3" role="alert">
+              Docs plugin detected. MCP documentation tools are enabled.
+            </div>
+          {% else %}
+            <div class="alert alert-warning py-2 px-3 mb-3" role="alert">
+              Docs plugin is not installed/active. Documentation MCP tools are hidden.
+            </div>
+          {% endif %}
+          <label class="form-label d-block mb-2">Allowed documentation sources</label>
+          <div class="row g-2">
+            {% for source_id in docs_source_options %}
+              <div class="col-12 col-md-6 col-xl-4">
+                <div class="form-check">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="docs_source_{{ loop.index }}"
+                    name="docs_allowed_sources_selected"
+                    value="{{ source_id }}"
+                    {% if source_id in docs_allowed_sources %}checked{% endif %}
+                  >
+                  <label class="form-check-label" for="docs_source_{{ loop.index }}">
+                    <code>{{ source_id }}</code>
+                  </label>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          <label for="docs_allowed_sources_extra" class="form-label mt-3">
+            Extra source IDs (optional, one per line or comma-separated)
+          </label>
+          <textarea
+            class="form-control"
+            id="docs_allowed_sources_extra"
+            name="docs_allowed_sources_extra"
+            rows="3"
+            placeholder="custom_source"
+          >{{ docs_allowed_sources_extra_text }}</textarea>
+          <div class="form-text">
+            Restricts <code>osys_search_docs</code> and <code>osys_get_doc</code> to selected source IDs.
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 mt-4">
+          <button type="submit" class="btn btn-primary">Save settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+{{ super() }}
+<script>
+(function () {
+  var clearCheckbox = document.getElementById('clear_auth_token');
+  var tokenInput = document.getElementById('auth_token');
+  if (!clearCheckbox || !tokenInput) {
+    return;
+  }
+  clearCheckbox.addEventListener('change', function () {
+    if (clearCheckbox.checked) {
+      tokenInput.value = '';
+      tokenInput.setAttribute('disabled', 'disabled');
+    } else {
+      tokenInput.removeAttribute('disabled');
+    }
+  });
+})();
+</script>
+{% endblock %}
