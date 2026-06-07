@@ -148,7 +148,10 @@ class MCPServer(BasePlugin):
         return render_template("mcp_admin.html", **content)
 
     def route_mcp(self):
+        from app.authentication.handlers import public_endpoint
+
         @self.blueprint.route("/api/mcp", methods=["GET", "POST"])
+        @public_endpoint
         def mcp_endpoint():
             if request.method == "GET":
                 return jsonify(

@@ -5,7 +5,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from sqlalchemy import or_
+
 from app.core.lib.constants import PropertyType
+from app.core.lib.common import getModulesByAction
 from app.core.lib.object import (
     addClassProperty,
     addObjectProperty,
@@ -16,9 +19,156 @@ from app.core.lib.object import (
     getProperty,
     setProperty,
 )
+from app.core.models.Clasess import Class, Method, Object, Property, Value
+from app.database import session_scope
 
 
 def handle_read_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
+    if tool_name == "osys_global_search":
+        query = str(args.get("query") or "").strip()
+        if len(query) < 2:
+            raise ValueError("query is required and must be at least 2 characters")
+        query_like = f"%{query.lower()}%"
+        include_plugin_search = bool(args.get("include_plugin_search", True))
+        max_items = int(plugin.config.get("max_list_items", 200))
+        limit = plugin._safe_int(args.get("limit"), 50, 1, 5000)
+        limit = min(limit, max_items)
+
+        items = []
+        with session_scope() as session:
+            rows = (
+                session.query(
+                    Object.id.label("object_id"),
+                    Object.name.label("object_name"),
+                    Object.description.label("object_description"),
+                    Class.id.label("class_id"),
+                    Class.name.label("class_name"),
+                    Property.id.label("property_id"),
+                    Property.name.label("property_name"),
+                    Property.description.label("property_description"),
+                    Property.method_id.label("property_method_id"),
+                    Method.id.label("property_method_db_id"),
+                    Method.name.label("property_method_name"),
+                    Value.linked.label("linked"),
+                    Value.value.label("property_value"),
+                )
+                .join(Class, Class.id == Object.class_id, isouter=True)
+                .join(Property, Property.object_id == Object.id, isouter=True)
+                .join(Method, Method.id == Property.method_id, isouter=True)
+                .join(
+                    Value,
+                    (Value.object_id == Object.id) & (Value.name == Property.name),
+                    isouter=True,
+                )
+                .filter(
+                    or_(
+                        Object.name.ilike(query_like),
+                        Object.description.ilike(query_like),
+                        Class.name.ilike(query_like),
+                        Property.name.ilike(query_like),
+                        Property.description.ilike(query_like),
+                        Method.name.ilike(query_like),
+                        Method.code.ilike(query_like),
+                        Value.linked.ilike(query_like),
+                        Value.value.ilike(query_like),
+                    )
+                )
+                .order_by(Object.name, Property.name)
+                .limit(limit)
+                .all()
+            )
+
+            for row in rows:
+                linked_plugins = []
+                if row.linked:
+                    linked_plugins = [item.strip() for item in str(row.linked).split(",") if item.strip()]
+                items.append(
+                    {
+                        "source": "core",
+                        "entity": {
+                            "object": {
+                                "id": row.object_id,
+                                "name": row.object_name,
+                                "description": row.object_description or "",
+                            },
+                            "class": (
+                                {"id": row.class_id, "name": row.class_name}
+                                if row.class_id is not None
+                                else None
+                            ),
+                            "property": (
+                                {
+                                    "id": row.property_id,
+                                    "name": row.property_name,
+                                    "description": row.property_description or "",
+                                    "value": row.property_value,
+                                }
+                                if row.property_id is not None
+                                else None
+                            ),
+                            "method": (
+                                {"id": row.property_method_db_id, "name": row.property_method_name}
+                                if row.property_method_db_id is not None
+                                else None
+                            ),
+                        },
+                        "links": {
+                            "linked_plugins": linked_plugins,
+                        },
+                        "relation_hints": [
+                            hint
+                            for hint in [
+                                f"class:{row.class_name}" if row.class_name else None,
+                                f"method:{row.property_method_name}" if row.property_method_name else None,
+                                f"plugins:{','.join(linked_plugins)}" if linked_plugins else None,
+                            ]
+                            if hint
+                        ],
+                    }
+                )
+
+        if include_plugin_search and len(items) < limit:
+            for search_plugin in getModulesByAction("search"):
+                if len(items) >= limit:
+                    break
+                plugin_name = getattr(search_plugin, "name", search_plugin.__class__.__name__)
+                try:
+                    plugin_results = search_plugin.search(query)
+                except Exception:
+                    continue
+                if not isinstance(plugin_results, list):
+                    continue
+
+                for rec in plugin_results:
+                    if len(items) >= limit:
+                        break
+                    if not isinstance(rec, dict):
+                        continue
+                    tags = rec.get("tags") if isinstance(rec.get("tags"), list) else []
+                    items.append(
+                        {
+                            "source": "plugin",
+                            "source_plugin": plugin_name,
+                            "entity": {
+                                "title": rec.get("title"),
+                                "url": rec.get("url"),
+                            },
+                            "links": {},
+                            "tags": tags,
+                            "relation_hints": [
+                                hint
+                                for hint in [
+                                    f"plugin:{plugin_name}",
+                                    f"tags:{','.join(str(tag.get('name')) for tag in tags if isinstance(tag, dict) and tag.get('name'))}"
+                                    if tags
+                                    else None,
+                                ]
+                                if hint
+                            ],
+                        }
+                    )
+
+        return plugin._tool_result({"query": query, "count": len(items), "items": items})
     if tool_name == "osys_list_objects":
         data = plugin._tool_list_objects(args)
         return plugin._tool_result(data)
@@ -434,6 +584,19 @@ def handle_history_and_runtime_tools(plugin, tool_name: str, args: dict) -> Opti
 
 def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
     return [
+        {
+            "name": "osys_global_search",
+            "description": "Global search across objects/properties/methods with relation hints",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 5000},
+                    "include_plugin_search": {"type": "boolean"},
+                },
+                "required": ["query"],
+            },
+        },
         {
             "name": "osys_list_objects",
             "description": "List objects available in osysHome",
