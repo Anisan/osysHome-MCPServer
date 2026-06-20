@@ -2,7 +2,7 @@
 
 ![MCPServer Icon](static/MCPServer.png)
 
-Интеграция MCP для osysHome по HTTP JSON-RPC с безопасной моделью прав, инструментами валидации кода методов и поддержкой шаблонов классов.
+Интеграция MCP для osysHome по HTTP JSON-RPC с безопасной моделью прав, поиском документации/исходников, инструментами валидации кода методов и поддержкой шаблонов классов.
 
 ## Документация
 
@@ -15,7 +15,9 @@
 - Endpoint `/api/mcp` (`GET` статус + `POST` JSON-RPC)
 - Токен-авторизация через `Authorization: Bearer` или `X-MCP-Token`
 - Security audit логирование неудачных попыток (`MCP_UNAUTHORIZED`)
-- Гибкие права через `allow_write_tools`, `allow_manage_*`
+- Гибкие права через `allow_write_tools`, `allow_logs_access`, `allow_source_access`, `allow_manage_*`
+- Инструменты документации (плагин Docs): `osys_search_docs`, `osys_get_doc` (whitelist источников в админке)
+- Read-only доступ к исходникам: `osys_read_source`, `osys_search_source`, `osys_list_source`
 - Интроспекция классов: `osys_list_classes`, `osys_get_class_full`
 - UI-метаданные свойств: `osys_get_property_ui`, `osys_update_property_ui`
 - Версионирование правок: `revision` + `if_match`

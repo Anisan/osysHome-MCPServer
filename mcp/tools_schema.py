@@ -10,6 +10,7 @@ from plugins.MCPServer.mcp.handlers.logs import get_tool_schemas as logs_schemas
 from plugins.MCPServer.mcp.handlers.methods import get_tool_schemas as method_schemas
 from plugins.MCPServer.mcp.handlers.objects_bulk import get_tool_schemas as object_bulk_schemas
 from plugins.MCPServer.mcp.handlers.property_runtime import get_tool_schemas as property_runtime_schemas
+from plugins.MCPServer.mcp.handlers.source import get_tool_schemas as source_schemas
 
 
 def build_tools_schema(property_params_schema: Dict, include_docs_tools: bool = True) -> List[dict]:
@@ -17,6 +18,7 @@ def build_tools_schema(property_params_schema: Dict, include_docs_tools: bool = 
     providers = [
         property_runtime_schemas,
         logs_schemas,
+        source_schemas,
         class_template_schemas,
         method_schemas,
         object_bulk_schemas,

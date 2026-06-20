@@ -1,15 +1,32 @@
 # MCPServer: техническая документация
 
 > [!IMPORTANT]
-> Актуальный источник: `plugins/MCPServer/__init__.py`.
+> Актуальный источник: `plugins/MCPServer/__init__.py` (RPC-транспорт) и `plugins/MCPServer/mcp/handlers/` (реализация инструментов).
 
 ## Точки входа
 
 | Компонент | Путь | Назначение |
 | :--- | :--- | :--- |
-| Класс плагина | `plugins/MCPServer/__init__.py` | Реализация MCP-сервера |
+| Класс плагина | `plugins/MCPServer/__init__.py` | MCP-сервер, авторизация, RPC dispatch |
+| Обработчики tools | `plugins/MCPServer/mcp/handlers/` | Логика инструментов по доменам |
+| Схемы tools | `plugins/MCPServer/mcp/tools_schema.py` | Сборка схем для `tools/list` |
+| Repository/utils | `plugins/MCPServer/core/` | Доступ к БД, общие утилиты |
+| Resources/prompts | `plugins/MCPServer/mcp/resources.py` | MCP resources и prompts |
 | HTTP endpoint | `/api/mcp` | MCP JSON-RPC транспорт |
 | Admin UI | `plugins/MCPServer/templates/mcp_admin.html` | Настройки модуля |
+
+## Модули обработчиков
+
+| Модуль | Ответственность |
+| :--- | :--- |
+| `mcp/handlers/property_runtime.py` | Чтение объектов/свойств, история, `osys_set_property`, `osys_call_method`, UI-метаданные |
+| `mcp/handlers/logs.py` | Список и чтение логов с маскированием секретов |
+| `mcp/handlers/source.py` | Read-only доступ к исходникам `app/` и `plugins/` |
+| `mcp/handlers/docs.py` | Поиск и чтение документации через плагин Docs |
+| `mcp/handlers/classes_templates.py` | CRUD классов, шаблоны, интроспекция |
+| `mcp/handlers/methods.py` | CRUD кода методов, валидация, dry-run |
+| `mcp/handlers/objects_bulk.py` | Объекты, шаблоны объектов, bulk-операции, удаление |
+| `mcp/handlers/common.py` | Маршрутизатор вызовов tools |
 
 ## MCP-методы
 
@@ -31,6 +48,8 @@
 | :--- | :--- | :--- |
 | Чтение | `osys_list_objects`, `osys_get_object`, `osys_get_property` | Не требуется |
 | Логи | `osys_list_logs`, `osys_read_log` | `allow_logs_access` |
+| Исходный код (read-only) | `osys_read_source`, `osys_search_source`, `osys_list_source` | `allow_source_access` |
+| Документация | `osys_search_docs`, `osys_get_doc` | Плагин Docs активен; фильтр `docs_allowed_sources` |
 | Интроспекция классов | `osys_get_class`, `osys_list_classes`, `osys_get_class_full` | `allow_class_introspection` |
 | UI-метаданные свойств | `osys_get_property_ui`, `osys_update_property_ui` | Чтение: не требуется, обновление: `allow_manage_properties` |
 | История | `osys_get_property_history`, `osys_get_property_history_aggregate` | Не требуется |
@@ -81,11 +100,37 @@
 - Инструменты свойств поддерживают `params` (JSON-объект).
 - Типовые ключи из модуля Objects: `icon`, `unit`, `color`, `min`, `max`, `step`, `decimals`, `regexp`, `enum_values` (только для enum), `sort_order`, `read_only`.
 
+## Инструменты документации
+
+Доступны при установленном и активном плагине Docs. Иначе не попадают в `tools/list`.
+
+| Инструмент | Назначение |
+| :--- | :--- |
+| `osys_search_docs` | Полнотекстовый поиск по индексу (`query`, опционально `source_id`, `locale`, `limit`) |
+| `osys_get_doc` | Чтение одной страницы как plain text (`source_id`, `path`, опционально `max_chars`) |
+
+`docs_allowed_sources` в конфиге ограничивает доступные `source_id`. По умолчанию: `core`, `Docs`, `MCPServer`.
+
+## Инструменты доступа к исходникам
+
+Read-only доступ к текстовым файлам в `app/` и `plugins/` (path traversal заблокирован).
+
+| Инструмент | Назначение | Лимиты |
+| :--- | :--- | :--- |
+| `osys_read_source` | Чтение файла по диапазону строк | до 2000 строк за вызов |
+| `osys_search_source` | Поиск текста или regex | до 200 совпадений, файлы до 2 МБ |
+| `osys_list_source` | Список файлов/каталогов | до 2000 элементов |
+
+Пропускаются каталоги: `__pycache__`, `.git`, `node_modules`, `.venv`, `venv`, `dist`, `build` и аналогичные.
+
 ## Resources
+
+Схема URI: `osys://`.
 
 Статические:
 - `osys://method-runtime/context`
 - `osys://method-runtime/spec`
+- `osys://method-runtime/symbols`
 - `osys://method-runtime/examples`
 - `osys://template/spec`
 
@@ -118,7 +163,9 @@
 - Неудачные попытки авторизации пишутся в security audit как `MCP_UNAUTHORIZED`.
 - Сравнение токенов: `hmac.compare_digest`.
 - Запись/управление ограничены флагами `allow_*`.
-- `osys_read_log` маскирует типичные секреты (token/password/api_key/Authorization/JWT) перед возвратом содержимого.
+- `osys_read_log` маскирует типичные секреты (токены, пароли, API keys, Bearer/Basic auth, JWT, cookies, private keys) перед возвратом содержимого.
+- `allow_source_access` открывает исходный код приложения; включайте только для доверенных сценариев отладки.
+- Инструменты документации учитывают whitelist `docs_allowed_sources`.
 
 ## Отказ от ответственности
 

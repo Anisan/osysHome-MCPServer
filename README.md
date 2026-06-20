@@ -2,7 +2,7 @@
 
 ![MCPServer Icon](static/MCPServer.png)
 
-MCP integration for osysHome over HTTP JSON-RPC with fine-grained permissions, method-code validation/dry-run tools, and class-template tooling.
+MCP integration for osysHome over HTTP JSON-RPC with fine-grained permissions, documentation/source introspection, method-code validation/dry-run tools, and class-template tooling.
 
 ## Documentation
 
@@ -15,7 +15,9 @@ MCP integration for osysHome over HTTP JSON-RPC with fine-grained permissions, m
 - MCP endpoint at `/api/mcp` (`GET` health + `POST` JSON-RPC)
 - Token auth via `Authorization: Bearer` or `X-MCP-Token`
 - Security-audit logging for failed auth attempts (`MCP_UNAUTHORIZED`)
-- Safe permission model (`allow_write_tools`, `allow_manage_*`)
+- Safe permission model (`allow_write_tools`, `allow_logs_access`, `allow_source_access`, `allow_manage_*`)
+- Documentation tools via Docs plugin: `osys_search_docs`, `osys_get_doc` (source whitelist in admin)
+- Read-only source introspection: `osys_read_source`, `osys_search_source`, `osys_list_source`
 - Class introspection: `osys_list_classes`, `osys_get_class_full`
 - UI metadata tools: `osys_get_property_ui`, `osys_update_property_ui`
 - Revision/optimistic concurrency: `revision` in read API + `if_match` in updates

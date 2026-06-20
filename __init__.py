@@ -66,6 +66,7 @@ class MCPServer(BasePlugin):
             "allow_write_tools": False,
             "allow_method_calls": True,
             "allow_logs_access": False,
+            "allow_source_access": False,
             "allow_class_introspection": False,
             "allow_manage_classes": False,
             "allow_manage_objects": False,
@@ -90,7 +91,10 @@ class MCPServer(BasePlugin):
         pass
 
     def admin(self, request):
-        if request.method == "POST":
+        if request.method == "GET":
+            self.loadConfig()
+        elif request.method == "POST":
+            self.loadConfig()
             clear_auth_token = request.form.get("clear_auth_token") == "on"
             entered_token = request.form.get("auth_token", "").strip()
             if clear_auth_token:
@@ -100,6 +104,7 @@ class MCPServer(BasePlugin):
             self.config["allow_write_tools"] = request.form.get("allow_write_tools") == "on"
             self.config["allow_method_calls"] = request.form.get("allow_method_calls") == "on"
             self.config["allow_logs_access"] = request.form.get("allow_logs_access") == "on"
+            self.config["allow_source_access"] = request.form.get("allow_source_access") == "on"
             self.config["allow_class_introspection"] = request.form.get("allow_class_introspection") == "on"
             self.config["allow_manage_classes"] = request.form.get("allow_manage_classes") == "on"
             self.config["allow_manage_objects"] = request.form.get("allow_manage_objects") == "on"
@@ -134,6 +139,7 @@ class MCPServer(BasePlugin):
             "allow_write_tools": bool(self.config.get("allow_write_tools", False)),
             "allow_method_calls": bool(self.config.get("allow_method_calls", True)),
             "allow_logs_access": bool(self.config.get("allow_logs_access", False)),
+            "allow_source_access": bool(self.config.get("allow_source_access", False)),
             "allow_class_introspection": bool(self.config.get("allow_class_introspection", False)),
             "allow_manage_classes": bool(self.config.get("allow_manage_classes", False)),
             "allow_manage_objects": bool(self.config.get("allow_manage_objects", False)),
@@ -277,6 +283,7 @@ class MCPServer(BasePlugin):
         return ["core"] + sorted((name for name in names if name != "core"), key=lambda value: value.lower())
 
     def _tools_call(self, params: dict) -> dict:
+        self.loadConfig()
         return dispatch_tools_call(self, params)
 
     def _tool_list_objects(self, args: dict) -> dict:

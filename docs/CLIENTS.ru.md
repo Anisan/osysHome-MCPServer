@@ -138,7 +138,10 @@ curl -X POST http://127.0.0.1:5000/api/mcp \
 - Включайте только нужные флаги:
   - `allow_write_tools`
   - `allow_method_calls`
+  - `allow_logs_access` (логи могут содержать секреты)
+  - `allow_source_access` (раскрывает исходный код `app/` и `plugins/`)
   - `allow_manage_*`
+- Ограничивайте `docs_allowed_sources`, если Docs plugin активен.
 
 ## Стратегия внедрения
 
@@ -152,7 +155,7 @@ flowchart TD
 ```
 
 1. Подключить клиента только на чтение.
-2. Проверить контекст (`osys_get_class`, `osys_get_template_spec`, `osys_get_object_method_code`).
+2. Проверить контекст (`osys_get_class`, `osys_get_template_spec`, `osys_search_docs`, `osys://method-runtime/spec`).
 3. Включить точечно нужные write-операции.
 4. Для method-code всегда выполнять `osys_validate_method_code` -> `osys_run_method_dry`.
 5. Только потом применять изменения.

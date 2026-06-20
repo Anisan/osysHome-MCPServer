@@ -22,7 +22,7 @@ def method_runtime_context_payload() -> dict:
                 "are auto-imported via 'from <module> import *'. You can use these functions/constants directly."
             ),
             "modules": list(MODULE_NAMES),
-            "symbols_resource_uri": "ngs://method-runtime/symbols",
+            "symbols_resource_uri": "osys://method-runtime/symbols",
         },
         "required_format": {
             "function_wrapper": "forbidden",

@@ -10,6 +10,9 @@
 - [Admin settings](#admin-settings)
 - [Authentication](#authentication)
 - [Typical workflows](#typical-workflows)
+  - [Documentation](#documentation-docs-plugin)
+  - [Logs](#logs-permission-required)
+  - [Source code](#source-code-permission-required)
 - [Revision and if_match](#revision-and-if_match)
 - [Method code constraints](#method-code-constraints)
 - [PowerShell check](#powershell-check)
@@ -42,12 +45,15 @@ MCPServer exposes `/api/mcp` for MCP JSON-RPC calls:
 | `Auth token` | Token auth for MCP requests |
 | `allow_write_tools` | Enables `osys_set_property` |
 | `allow_method_calls` | Enables `osys_call_method` |
+| `allow_logs_access` | Enables `osys_list_logs`, `osys_read_log` (sensitive data) |
+| `allow_source_access` | Enables `osys_read_source`, `osys_search_source`, `osys_list_source` |
 | `allow_class_introspection` | Read-only class introspection tools |
 | `allow_manage_classes` | Class/template management tools |
 | `allow_manage_objects` | Object tools |
 | `allow_manage_properties` | Property + UI metadata tools |
 | `allow_manage_methods` | Method code + bulk method updates |
 | `max_list_items` | Limits list/read volumes |
+| `docs_allowed_sources` | Whitelist of documentation `source_id` values for `osys_search_docs` / `osys_get_doc` (requires Docs plugin) |
 
 ## Authentication
 
@@ -74,6 +80,26 @@ Failed auth attempts are recorded in security audit logs (`MCP_UNAUTHORIZED`).
 - `osys_list_classes`
 - `osys_get_class`
 - `osys_get_class_full`
+
+### Documentation (Docs plugin)
+
+- `osys_search_docs` — search by query, optional `source_id` and `locale`
+- `osys_get_doc` — read one page as plain text (`source_id` + `path`)
+
+Restrict sources in admin via `docs_allowed_sources` if you do not want MCP clients to read all plugin docs.
+
+### Logs (permission required)
+
+- `osys_list_logs`
+- `osys_read_log` — reads first/last N lines; secrets are masked automatically
+
+### Source code (permission required)
+
+- `osys_list_source` — browse `app/` or `plugins/` directories
+- `osys_read_source` — read a file by line range
+- `osys_search_source` — text or regex search with optional `path_prefix`
+
+Use only on trusted networks; exposes application internals.
 
 ### Class lifecycle
 
@@ -164,3 +190,5 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] `osys_get_property_ui`/`osys_update_property_ui` work
 - [ ] `revision` + `if_match` works on updates
 - [ ] Security audit logs record failed auth attempts
+- [ ] `osys_search_docs` / `osys_get_doc` respect `docs_allowed_sources`
+- [ ] Source tools are disabled unless explicitly needed

@@ -31,7 +31,7 @@ STATIC_RESOURCE_DEFINITIONS = [
         "mimeType": "application/json",
     },
     {
-        "uri": "ngs://method-runtime/symbols",
+        "uri": "osys://method-runtime/symbols",
         "name": "method-runtime-symbols",
         "description": "Public symbols auto-imported into method exec runtime",
         "mimeType": "application/json",
@@ -108,7 +108,7 @@ def resources_read(plugin, params: dict) -> dict:
 
 def read_resource_uri(plugin, uri: str) -> Tuple[str, str]:
     parsed = urlparse(uri)
-    if parsed.scheme != "ngs":
+    if parsed.scheme != "osys":
         raise ValueError(f"Unsupported URI scheme: {parsed.scheme}")
 
     host = parsed.netloc

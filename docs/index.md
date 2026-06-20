@@ -13,7 +13,8 @@ Quick navigation for MCPServer documentation in osysHome.
 | :--- | :--- | :--- |
 | Setup and operations | Admin / Integrator | [USER_GUIDE.md](./USER_GUIDE.md) |
 | API contract and internals | Developer | [TECHNICAL_REFERENCE.md](./TECHNICAL_REFERENCE.md) |
-| IDE/MCP client setup | End user | [CLIENTS.ru.md](./CLIENTS.ru.md) |
+| IDE/MCP client setup | End user | [CLIENTS.ru.md](./CLIENTS.ru.md) (RU) |
+| Source & docs tools | Developer / Integrator | [TECHNICAL_REFERENCE.md](./TECHNICAL_REFERENCE.md#documentation-tools) |
 
 ## RU docs
 

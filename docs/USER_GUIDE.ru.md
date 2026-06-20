@@ -10,6 +10,9 @@
 - [Настройки модуля](#настройки-модуля)
 - [Авторизация](#авторизация)
 - [Типовые сценарии](#типовые-сценарии)
+  - [Документация](#документация-плагин-docs)
+  - [Логи](#логи-нужно-разрешение)
+  - [Исходный код](#исходный-код-нужно-разрешение)
 - [Revision и if_match](#revision-и-if_match)
 - [Ограничения кода методов](#ограничения-кода-методов)
 - [Проверка через PowerShell](#проверка-через-powershell)
@@ -42,12 +45,15 @@ MCPServer открывает endpoint `/api/mcp` для MCP JSON-RPC:
 | `Auth token` | Токен-авторизация MCP |
 | `allow_write_tools` | Разрешает `osys_set_property` |
 | `allow_method_calls` | Разрешает `osys_call_method` |
+| `allow_logs_access` | Разрешает `osys_list_logs`, `osys_read_log` (чувствительные данные) |
+| `allow_source_access` | Разрешает `osys_read_source`, `osys_search_source`, `osys_list_source` |
 | `allow_class_introspection` | Read-only интроспекция классов |
 | `allow_manage_classes` | Управление классами/шаблонами |
 | `allow_manage_objects` | Объекты |
 | `allow_manage_properties` | Свойства + UI-метаданные |
 | `allow_manage_methods` | Методы + bulk-обновления |
 | `max_list_items` | Ограничение объема выдачи |
+| `docs_allowed_sources` | Whitelist `source_id` для `osys_search_docs` / `osys_get_doc` (нужен плагин Docs) |
 
 ## Авторизация
 
@@ -74,6 +80,26 @@ MCPServer открывает endpoint `/api/mcp` для MCP JSON-RPC:
 - `osys_list_classes`
 - `osys_get_class`
 - `osys_get_class_full`
+
+### Документация (плагин Docs)
+
+- `osys_search_docs` — поиск по запросу, опционально `source_id` и `locale`
+- `osys_get_doc` — чтение одной страницы как plain text (`source_id` + `path`)
+
+Ограничивайте источники в админке через `docs_allowed_sources`, если не хотите отдавать MCP-клиенту всю документацию плагинов.
+
+### Логи (нужно разрешение)
+
+- `osys_list_logs`
+- `osys_read_log` — чтение первых/последних N строк; секреты маскируются автоматически
+
+### Исходный код (нужно разрешение)
+
+- `osys_list_source` — обход каталогов `app/` или `plugins/`
+- `osys_read_source` — чтение файла по диапазону строк
+- `osys_search_source` — поиск текста или regex с опциональным `path_prefix`
+
+Включайте только в доверенных сценариях: раскрывает внутренности приложения.
 
 ### Жизненный цикл класса
 
@@ -164,3 +190,5 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] `osys_get_property_ui`/`osys_update_property_ui` работают
 - [ ] `revision` + `if_match` работают в update
 - [ ] В security audit фиксируются неуспешные попытки входа
+- [ ] `osys_search_docs` / `osys_get_doc` учитывают `docs_allowed_sources`
+- [ ] Source tools выключены, если не нужны явно

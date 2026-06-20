@@ -13,6 +13,7 @@ from plugins.MCPServer.mcp.handlers.property_runtime import (
     handle_property_tools,
     handle_read_tools,
 )
+from plugins.MCPServer.mcp.handlers.source import handle_source_tools
 
 
 def tools_call(plugin, params: dict) -> dict:
@@ -26,6 +27,7 @@ def tools_call(plugin, params: dict) -> dict:
     for handler in (
         handle_read_tools,
         handle_log_tools,
+        handle_source_tools,
         handle_docs_tools,
         handle_history_and_runtime_tools,
         handle_class_tools,

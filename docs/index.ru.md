@@ -11,6 +11,7 @@
 | Настройка и эксплуатация | Администратор / интегратор | [USER_GUIDE.ru.md](./USER_GUIDE.ru.md) |
 | API-контракт и внутреннее устройство | Разработчик | [TECHNICAL_REFERENCE.ru.md](./TECHNICAL_REFERENCE.ru.md) |
 | Настройка MCP-клиентов (VS Code, Cursor) | Пользователь | [CLIENTS.ru.md](./CLIENTS.ru.md) |
+| Source & docs tools | Разработчик / интегратор | [TECHNICAL_REFERENCE.ru.md](./TECHNICAL_REFERENCE.ru.md) |
 
 ## EN-версия
 
