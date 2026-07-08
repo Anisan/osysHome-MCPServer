@@ -28,15 +28,9 @@ def _docs_plugin_or_error():
 
 
 def _allowed_sources(plugin) -> Optional[set[str]]:
-    raw = plugin.config.get("docs_allowed_sources", ["core", "Docs", "MCPServer"])
-    if raw is None:
-        return None
-    if not isinstance(raw, list):
-        return {"core"}
-    allowed = {str(item).strip() for item in raw if str(item).strip()}
-    if not allowed:
-        return {"core"}
-    return allowed
+    if not bool(plugin.config.get("allow_docs_access", False)):
+        return set()
+    return None
 
 
 def _is_source_allowed(plugin, source_id: str) -> bool:

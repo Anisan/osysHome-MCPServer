@@ -13,6 +13,7 @@ from app.core.lib.object import (
     addClassProperty,
     addObjectProperty,
     callMethod,
+    deleteClassProperty,
     getHistory,
     getHistoryAggregate,
     getObject,
@@ -197,6 +198,45 @@ def handle_read_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
         if value is False:
             raise ValueError(f"Invalid property name: {prop_name}")
         return plugin._tool_result({"property": prop_name, "value": plugin._serialize_value(value)})
+    if tool_name == "osys_get_properties_batch":
+        names = args.get("property_names") or []
+        include_source = bool(args.get("include_source", False))
+        include_ui = bool(args.get("include_ui", False))
+        if not isinstance(names, list):
+            raise ValueError("property_names must be an array")
+        items = []
+        errors = []
+        for idx, raw_name in enumerate(names):
+            prop_name = str(raw_name or "").strip()
+            if not prop_name:
+                errors.append({"index": idx, "property": raw_name, "error": "property name is empty"})
+                continue
+            value = getProperty(prop_name)
+            if value is False:
+                errors.append({"index": idx, "property": prop_name, "error": "invalid property name"})
+                continue
+            item = {
+                "property": prop_name,
+                "value": plugin._serialize_value(value),
+            }
+            if include_source:
+                source = getProperty(prop_name, "source")
+                item["source"] = plugin._serialize_value(source)
+            if include_ui:
+                object_name, property_name = prop_name.split(".", 1)
+                rec = plugin._get_object_property_record(object_name, property_name)
+                if rec is None:
+                    item["ui"] = None
+                else:
+                    item["ui"] = rec.get("params", {})
+            items.append(item)
+        return plugin._tool_result(
+            {
+                "count": len(items),
+                "items": items,
+                "errors": errors,
+            }
+        )
     if tool_name == "osys_get_property_ui":
         class_name = (args.get("class_name") or "").strip()
         object_name = (args.get("object_name") or "").strip()
@@ -490,6 +530,21 @@ def handle_property_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
                 "revision": plugin._revision_for_payload(updated or {}),
             }
         )
+    if tool_name == "osys_delete_class_property":
+        plugin._require_permission("allow_manage_properties", "Property management tools are disabled")
+        class_name = (args.get("class_name") or "").strip()
+        property_name = (args.get("property_name") or "").strip()
+        if not class_name or not property_name:
+            raise ValueError("class_name and property_name are required")
+        existing = plugin._get_class_property_record(class_name, property_name)
+        if existing is None:
+            raise ValueError(f"Class property not found: {class_name}.{property_name}")
+        plugin._enforce_if_match((args.get("if_match") or "").strip() or None, plugin._revision_for_payload(existing))
+        success = deleteClassProperty(f"{class_name}.{property_name}")
+        if not success:
+            raise ValueError(f"Failed to delete class property: {class_name}.{property_name}")
+        plugin._reload_objects_by_class_name(class_name)
+        return plugin._tool_result({"ok": True, "deleted_property": f"{class_name}.{property_name}"})
     return None
 
 
@@ -533,7 +588,7 @@ def handle_history_and_runtime_tools(plugin, tool_name: str, args: dict) -> Opti
             "value": plugin._serialize_value(agg),
         }
         return plugin._tool_result(payload)
-    if tool_name == "osys_set_property":
+    if tool_name == "osys_write_property":
         if not plugin.config.get("allow_write_tools", False):
             raise PermissionError("Write tools are disabled in plugin config")
         prop_name = (args.get("property_name") or "").strip()
@@ -545,7 +600,7 @@ def handle_history_and_runtime_tools(plugin, tool_name: str, args: dict) -> Opti
             raise ValueError(f"Failed to set property: {prop_name}")
         value = getProperty(prop_name)
         return plugin._tool_result({"ok": True, "property": prop_name, "value": plugin._serialize_value(value)})
-    if tool_name == "osys_call_method":
+    if tool_name == "osys_invoke_method":
         if not plugin.config.get("allow_method_calls", True):
             raise PermissionError("Method calls are disabled in plugin config")
         method_name = (args.get("method_name") or "").strip()
@@ -619,6 +674,19 @@ def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
             "inputSchema": {"type": "object", "properties": {"property_name": {"type": "string"}}, "required": ["property_name"]},
         },
         {
+            "name": "osys_get_properties_batch",
+            "description": "Get multiple property values in one call",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "property_names": {"type": "array", "items": {"type": "string"}},
+                    "include_source": {"type": "boolean"},
+                    "include_ui": {"type": "boolean"},
+                },
+                "required": ["property_names"],
+            },
+        },
+        {
             "name": "osys_get_property_ui",
             "description": "Get UI params for class/object property",
             "inputSchema": {
@@ -677,8 +745,8 @@ def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
             },
         },
         {
-            "name": "osys_set_property",
-            "description": "Set property value by Object.Property name",
+            "name": "osys_write_property",
+            "description": "Write property value by Object.Property name",
             "inputSchema": {
                 "type": "object",
                 "properties": {"property_name": {"type": "string"}, "value": {}, "source": {"type": "string"}},
@@ -686,8 +754,8 @@ def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
             },
         },
         {
-            "name": "osys_call_method",
-            "description": "Call object method by Object.Method name",
+            "name": "osys_invoke_method",
+            "description": "Invoke object method by Object.Method name",
             "inputSchema": {
                 "type": "object",
                 "properties": {"method_name": {"type": "string"}, "args": {"type": "object"}, "source": {"type": "string"}},
@@ -753,6 +821,19 @@ def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
                     "if_match": {"type": "string"},
                 },
                 "required": ["class_name", "name"],
+            },
+        },
+        {
+            "name": "osys_delete_class_property",
+            "description": "Delete class property",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {"type": "string"},
+                    "property_name": {"type": "string"},
+                    "if_match": {"type": "string"},
+                },
+                "required": ["class_name", "property_name"],
             },
         },
         {

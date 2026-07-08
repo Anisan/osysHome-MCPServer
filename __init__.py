@@ -41,6 +41,7 @@ from app.core.models.Clasess import Class, Method, Object, Property
 from app.core.main.ObjectsStorage import objects_storage
 from app.database import session_scope
 from plugins.MCPServer.mcp.handlers.common import tools_call as dispatch_tools_call
+from plugins.MCPServer.mcp.handlers.plugins import list_mcp_capable_plugins
 from plugins.MCPServer.mcp import resources as mcp_resources
 from plugins.MCPServer.mcp.tools_schema import build_tools_schema
 from plugins.MCPServer.core import repository as mcp_repository
@@ -51,7 +52,6 @@ class MCPServer(BasePlugin):
     """Model Context Protocol server as a platform plugin."""
 
     _PROTOCOL_VERSION = "2024-11-05"
-    _DEFAULT_DOC_SOURCES = ["core", "Docs", "MCPServer"]
 
     def __init__(self, app):
         super().__init__(app, __name__)
@@ -72,13 +72,23 @@ class MCPServer(BasePlugin):
             "allow_manage_objects": False,
             "allow_manage_properties": False,
             "allow_manage_methods": False,
+            "allow_read_plugins": True,
+            "allow_manage_plugins": False,
+            "plugins_allowed": [],
             "max_list_items": 200,
-            "docs_allowed_sources": list(self._DEFAULT_DOC_SOURCES),
+            "allow_docs_access": False,
         }
         for key, value in defaults.items():
             if key not in self.config:
                 self.config[key] = value
                 changed = True
+        # Backward compatibility: old per-source docs whitelist -> single on/off flag.
+        if "allow_docs_access" not in self.config:
+            old_sources = self.config.get("docs_allowed_sources")
+            self.config["allow_docs_access"] = bool(
+                isinstance(old_sources, list) and any(str(item).strip() for item in old_sources)
+            )
+            changed = True
         # Backward compatibility: old configs with class management enabled
         # should keep read-only class introspection available after upgrade.
         if "allow_class_introspection" not in self.config and bool(self.config.get("allow_manage_classes", False)):
@@ -110,29 +120,19 @@ class MCPServer(BasePlugin):
             self.config["allow_manage_objects"] = request.form.get("allow_manage_objects") == "on"
             self.config["allow_manage_properties"] = request.form.get("allow_manage_properties") == "on"
             self.config["allow_manage_methods"] = request.form.get("allow_manage_methods") == "on"
+            self.config["allow_read_plugins"] = request.form.get("allow_read_plugins") == "on"
+            self.config["allow_manage_plugins"] = request.form.get("allow_manage_plugins") == "on"
+            selected_plugins = [
+                item.strip()
+                for item in request.form.getlist("plugins_allowed_selected")
+                if item.strip()
+            ]
+            self.config["plugins_allowed"] = selected_plugins
             self.config["max_list_items"] = self._safe_int(request.form.get("max_list_items"), 200, 1, 5000)
-            selected_sources = [item.strip() for item in request.form.getlist("docs_allowed_sources_selected") if item.strip()]
-            raw_docs_sources_extra = (request.form.get("docs_allowed_sources_extra") or "").strip()
-            extra_sources = []
-            if raw_docs_sources_extra:
-                tokens = [item.strip() for item in re.split(r"[,\n;]+", raw_docs_sources_extra)]
-                extra_sources = [item for item in tokens if item]
-            merged_sources = []
-            for item in selected_sources + extra_sources:
-                if item not in merged_sources:
-                    merged_sources.append(item)
-            if not merged_sources:
-                merged_sources = list(self._DEFAULT_DOC_SOURCES)
-            self.config["docs_allowed_sources"] = merged_sources
+            self.config["allow_docs_access"] = request.form.get("allow_docs_access") == "on"
             self.saveConfig()
 
         endpoint = "/api/mcp"
-        docs_allowed_sources = self.config.get("docs_allowed_sources", list(self._DEFAULT_DOC_SOURCES))
-        if not isinstance(docs_allowed_sources, list):
-            docs_allowed_sources = list(self._DEFAULT_DOC_SOURCES)
-        docs_allowed_sources = [str(item).strip() for item in docs_allowed_sources if str(item).strip()]
-        docs_source_options = self._known_docs_sources()
-        docs_extra_sources = [item for item in docs_allowed_sources if item not in docs_source_options]
         content = {
             "endpoint": endpoint,
             "auth_enabled": bool(self.config.get("auth_token", "").strip()),
@@ -145,11 +145,13 @@ class MCPServer(BasePlugin):
             "allow_manage_objects": bool(self.config.get("allow_manage_objects", False)),
             "allow_manage_properties": bool(self.config.get("allow_manage_properties", False)),
             "allow_manage_methods": bool(self.config.get("allow_manage_methods", False)),
+            "allow_read_plugins": bool(self.config.get("allow_read_plugins", True)),
+            "allow_manage_plugins": bool(self.config.get("allow_manage_plugins", False)),
+            "plugins_allowed": self.config.get("plugins_allowed") or [],
+            "mcp_plugin_options": list_mcp_capable_plugins(),
             "max_list_items": int(self.config.get("max_list_items", 200)),
             "docs_available": self._docs_available(),
-            "docs_source_options": docs_source_options,
-            "docs_allowed_sources": docs_allowed_sources,
-            "docs_allowed_sources_extra_text": "\n".join(docs_extra_sources),
+            "allow_docs_access": bool(self.config.get("allow_docs_access", False)),
         }
         return render_template("mcp_admin.html", **content)
 
@@ -236,6 +238,7 @@ class MCPServer(BasePlugin):
         if method == "notifications/initialized":
             return {}
         if method == "tools/list":
+            self.loadConfig()
             return {"tools": self._tools_schema()}
         if method == "tools/call":
             return self._tools_call(params)
@@ -250,37 +253,17 @@ class MCPServer(BasePlugin):
         raise NotImplementedError(f"Method not found: {method}")
 
     def _tools_schema(self) -> List[dict]:
-        return build_tools_schema(
+        from plugins.MCPServer.mcp.permissions import filter_tool_schemas
+
+        schemas = build_tools_schema(
             self._property_params_schema(),
             include_docs_tools=self._docs_available(),
         )
+        return filter_tool_schemas(self, schemas)
 
     @staticmethod
     def _docs_available() -> bool:
         return getModule("Docs") is not None
-
-    def _known_docs_sources(self) -> List[str]:
-        names = {"core"}
-        docs_plugin = getModule("Docs")
-        if docs_plugin is not None:
-            try:
-                docs_plugin._ensure_index_started()
-                for entry in getattr(docs_plugin, "_docs_index", []):
-                    source_id = str((entry or {}).get("source_id") or "").strip()
-                    if source_id:
-                        names.add(source_id)
-            except Exception:
-                pass
-        try:
-            from app.core.main.PluginsHelper import plugins as active_plugins
-
-            for plugin_name in active_plugins.keys():
-                source_id = str(plugin_name).strip()
-                if source_id:
-                    names.add(source_id)
-        except Exception:
-            pass
-        return ["core"] + sorted((name for name in names if name != "core"), key=lambda value: value.lower())
 
     def _tools_call(self, params: dict) -> dict:
         self.loadConfig()
@@ -316,7 +299,7 @@ class MCPServer(BasePlugin):
         return mcp_resources.read_resource_uri(self, uri)
 
     def _prompts_list(self) -> List[dict]:
-        return mcp_resources.prompts_list()
+        return mcp_resources.prompts_list(self)
 
     def _prompts_get(self, params: dict) -> dict:
         return mcp_resources.prompts_get(self, params)

@@ -103,7 +103,12 @@ def resolve_template_source(object_template: Any, class_template: Any) -> Tuple[
 
 def get_object_record(object_name: str) -> Optional[Dict[str, Any]]:
     with session_scope() as session:
-        obj = session.query(Object).filter(Object.name == object_name).one_or_none()
+        obj = (
+            session.query(Object)
+            .filter(Object.name == object_name)
+            .order_by(Object.id.asc())
+            .first()
+        )
         if obj is None:
             return None
         cls = session.query(Class).filter(Class.id == obj.class_id).one_or_none() if obj.class_id else None
@@ -149,7 +154,8 @@ def get_class_property_record(class_name: str, property_name: str) -> Optional[D
         rec = (
             session.query(Property)
             .filter(Property.class_id == cls.id, Property.name == property_name)
-            .one_or_none()
+            .order_by(Property.id.asc())
+            .first()
         )
         if rec is None:
             return None
@@ -170,13 +176,19 @@ def get_class_property_record(class_name: str, property_name: str) -> Optional[D
 
 def get_object_property_record(object_name: str, property_name: str) -> Optional[Dict[str, Any]]:
     with session_scope() as session:
-        obj = session.query(Object).filter(Object.name == object_name).one_or_none()
+        obj = (
+            session.query(Object)
+            .filter(Object.name == object_name)
+            .order_by(Object.id.asc())
+            .first()
+        )
         if obj is None:
             return None
         rec = (
             session.query(Property)
             .filter(Property.object_id == obj.id, Property.name == property_name)
-            .one_or_none()
+            .order_by(Property.id.asc())
+            .first()
         )
         if rec is None:
             return None
@@ -198,7 +210,12 @@ def get_object_property_record(object_name: str, property_name: str) -> Optional
 
 def get_inherited_class_method_for_object(object_name: str, method_name: str) -> Optional[Dict[str, Any]]:
     with session_scope() as session:
-        obj = session.query(Object).filter(Object.name == object_name).one_or_none()
+        obj = (
+            session.query(Object)
+            .filter(Object.name == object_name)
+            .order_by(Object.id.asc())
+            .first()
+        )
         if obj is None or not obj.class_id:
             return None
         rec = (
@@ -314,7 +331,12 @@ def get_class_full_record(class_name: str) -> Optional[Dict[str, Any]]:
 
 def get_object_method_record(object_name: str, method_name: str) -> Optional[Dict[str, Any]]:
     with session_scope() as session:
-        obj = session.query(Object).filter(Object.name == object_name).one_or_none()
+        obj = (
+            session.query(Object)
+            .filter(Object.name == object_name)
+            .order_by(Object.id.asc())
+            .first()
+        )
         if obj is None:
             return None
         rec = (

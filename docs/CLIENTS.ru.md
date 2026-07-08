@@ -30,6 +30,8 @@
 4. Подключить клиент.
 5. Выполнить `initialize` + `tools/list` + `resources/list`.
 
+> `tools/list` отдаёт только инструменты, разрешённые токену (`allow_*` в админке). Полный каталог — `osys_server_capabilities` или resource `osys://server/capabilities`.
+
 ## VS Code
 
 > [!TIP]

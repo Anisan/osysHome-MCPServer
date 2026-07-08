@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from app.core.lib.object import addClassMethod, addObjectMethod
+from app.core.lib.object import addClassMethod, addObjectMethod, deleteClassMethod
 
 
 def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
@@ -125,6 +125,21 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
                 "revision": plugin._revision_for_payload(updated or {}),
             }
         )
+    if tool_name == "osys_delete_class_method":
+        plugin._require_permission("allow_manage_methods", "Method management tools are disabled")
+        class_name = (args.get("class_name") or "").strip()
+        method_name = (args.get("method_name") or "").strip()
+        if not class_name or not method_name:
+            raise ValueError("class_name and method_name are required")
+        existing = plugin._get_class_method_record(class_name, method_name)
+        if existing is None:
+            raise ValueError(f"Class method not found: {class_name}.{method_name}")
+        plugin._enforce_if_match((args.get("if_match") or "").strip() or None, plugin._revision_for_payload(existing))
+        success = deleteClassMethod(f"{class_name}.{method_name}")
+        if not success:
+            raise ValueError(f"Failed to delete class method: {class_name}.{method_name}")
+        plugin._reload_objects_by_class_name(class_name)
+        return plugin._tool_result({"ok": True, "deleted_method": f"{class_name}.{method_name}"})
     if tool_name == "osys_add_object_method":
         plugin._require_permission("allow_manage_methods", "Method management tools are disabled")
         object_name = (args.get("object_name") or "").strip()
@@ -261,6 +276,19 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "if_match": {"type": "string"},
                 },
                 "required": ["class_name", "name"],
+            },
+        },
+        {
+            "name": "osys_delete_class_method",
+            "description": "Delete class method",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "class_name": {"type": "string"},
+                    "method_name": {"type": "string"},
+                    "if_match": {"type": "string"},
+                },
+                "required": ["class_name", "method_name"],
             },
         },
         {

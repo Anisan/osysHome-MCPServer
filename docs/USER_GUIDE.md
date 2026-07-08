@@ -43,8 +43,8 @@ MCPServer exposes `/api/mcp` for MCP JSON-RPC calls:
 | Setting | Effect |
 | :--- | :--- |
 | `Auth token` | Token auth for MCP requests |
-| `allow_write_tools` | Enables `osys_set_property` |
-| `allow_method_calls` | Enables `osys_call_method` |
+| `allow_write_tools` | Enables `osys_write_property` |
+| `allow_method_calls` | Enables `osys_invoke_method` |
 | `allow_logs_access` | Enables `osys_list_logs`, `osys_read_log` (sensitive data) |
 | `allow_source_access` | Enables `osys_read_source`, `osys_search_source`, `osys_list_source` |
 | `allow_class_introspection` | Read-only class introspection tools |
@@ -192,3 +192,4 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] Security audit logs record failed auth attempts
 - [ ] `osys_search_docs` / `osys_get_doc` respect `docs_allowed_sources`
 - [ ] Source tools are disabled unless explicitly needed
+- [ ] `tools/list` count matches token permissions; full catalog via `osys_server_capabilities`

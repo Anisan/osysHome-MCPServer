@@ -11,6 +11,8 @@
 | Обработчики tools | `plugins/MCPServer/mcp/handlers/` | Логика инструментов по доменам |
 | Схемы tools | `plugins/MCPServer/mcp/tools_schema.py` | Сборка схем для `tools/list` |
 | Repository/utils | `plugins/MCPServer/core/` | Доступ к БД, общие утилиты |
+| Permissions | `plugins/MCPServer/mcp/permissions.py` | Permission-aware `tools/list` и фильтрация resources |
+| Telemetry | `plugins/MCPServer/mcp/telemetry.py` | Ring buffer вызовов tools (duration/outcome) |
 | Resources/prompts | `plugins/MCPServer/mcp/resources.py` | MCP resources и prompts |
 | HTTP endpoint | `/api/mcp` | MCP JSON-RPC транспорт |
 | Admin UI | `plugins/MCPServer/templates/mcp_admin.html` | Настройки модуля |
@@ -19,13 +21,14 @@
 
 | Модуль | Ответственность |
 | :--- | :--- |
-| `mcp/handlers/property_runtime.py` | Чтение объектов/свойств, история, `osys_set_property`, `osys_call_method`, UI-метаданные |
+| `mcp/handlers/property_runtime.py` | Чтение объектов/свойств, история, `osys_write_property`, `osys_invoke_method`, UI-метаданные |
 | `mcp/handlers/logs.py` | Список и чтение логов с маскированием секретов |
 | `mcp/handlers/source.py` | Read-only доступ к исходникам `app/` и `plugins/` |
 | `mcp/handlers/docs.py` | Поиск и чтение документации через плагин Docs |
 | `mcp/handlers/classes_templates.py` | CRUD классов, шаблоны, интроспекция |
 | `mcp/handlers/methods.py` | CRUD кода методов, валидация, dry-run |
 | `mcp/handlers/objects_bulk.py` | Объекты, шаблоны объектов, bulk-операции, удаление |
+| `mcp/handlers/plugins.py` | Плагины: config, collections, property links |
 | `mcp/handlers/common.py` | Маршрутизатор вызовов tools |
 
 ## MCP-методы
@@ -35,7 +38,7 @@
 | `initialize` | Инициализация и capabilities |
 | `ping` | Проверка доступности |
 | `notifications/initialized` | Обработка уведомления |
-| `tools/list` | Схемы инструментов |
+| `tools/list` | Схемы инструментов с учётом `allow_*` |
 | `tools/call` | Вызов инструмента |
 | `resources/list` | Список ресурсов |
 | `resources/read` | Чтение ресурса |
@@ -50,19 +53,46 @@
 | Логи | `osys_list_logs`, `osys_read_log` | `allow_logs_access` |
 | Исходный код (read-only) | `osys_read_source`, `osys_search_source`, `osys_list_source` | `allow_source_access` |
 | Документация | `osys_search_docs`, `osys_get_doc` | Плагин Docs активен; фильтр `docs_allowed_sources` |
-| Интроспекция классов | `osys_get_class`, `osys_list_classes`, `osys_get_class_full` | `allow_class_introspection` |
+| Интроспекция классов | `osys_get_class`, `osys_list_classes`, `osys_get_class_tree`, `osys_get_class_full` | `allow_class_introspection` |
 | UI-метаданные свойств | `osys_get_property_ui`, `osys_update_property_ui` | Чтение: не требуется, обновление: `allow_manage_properties` |
 | История | `osys_get_property_history`, `osys_get_property_history_aggregate` | Не требуется |
-| Запись значения | `osys_set_property` | `allow_write_tools` |
-| Вызов метода | `osys_call_method` | `allow_method_calls` |
+| Запись значения | `osys_write_property` | `allow_write_tools` |
+| Вызов метода | `osys_invoke_method` | `allow_method_calls` |
 | Классы/шаблоны | `osys_add_class`, `osys_update_class`, `osys_delete_class`, `osys_get_template_spec`, `osys_validate_class_template`, `osys_render_class_template` | `allow_manage_classes` |
-| Свойства класса | `osys_add_class_property`, `osys_update_class_property` | `allow_manage_properties` |
-| Методы класса | `osys_add_class_method`, `osys_update_class_method`, `osys_get_class_method_code`, `osys_validate_method_code`, `osys_run_method_dry` | `allow_manage_methods` |
+| Свойства класса | `osys_add_class_property`, `osys_update_class_property`, `osys_delete_class_property` | `allow_manage_properties` |
+| Методы класса | `osys_add_class_method`, `osys_update_class_method`, `osys_delete_class_method`, `osys_get_class_method_code`, `osys_validate_method_code`, `osys_run_method_dry` | `allow_manage_methods` |
 | Объекты | `osys_add_object`, `osys_update_object`, `osys_delete_object` | `allow_manage_objects` |
 | Предпросмотр шаблонов объекта | `osys_validate_object_template`, `osys_render_object_template` | Не требуется |
 | Свойства объекта | `osys_add_object_property`, `osys_update_object_property`, `osys_delete_object_property` | `allow_manage_properties` |
 | Методы объекта | `osys_add_object_method`, `osys_update_object_method`, `osys_delete_object_method`, `osys_get_object_method_code` | `allow_manage_methods` |
 | Массовые правки | `osys_bulk_update_class_properties`, `osys_bulk_update_methods` | По правам свойств/методов |
+| Плагины (чтение) | `osys_list_plugins`, `osys_get_plugin_config`, `osys_plugin_capabilities`, `osys_plugin_entity_schema`, `osys_plugin_list_entities`, `osys_plugin_get_entity`, `osys_plugin_search`, `osys_plugin_validate_entity_code`, `osys_plugin_run_entity_dry` | `allow_read_plugins` |
+| Плагины (запись) | `osys_update_plugin_config`, `osys_manage_property_links`, `osys_plugin_upsert_entity`, `osys_plugin_delete_entity`, `osys_plugin_invoke`, `osys_bind_device` | `allow_manage_plugins` |
+| Сервер (meta) | `osys_server_capabilities`, `osys_health`, `osys_system_stats`, `osys_audit_log` | См. `osys_server_capabilities` |
+
+## `osys_server_capabilities`
+
+Возвращает: `permissions`, `tool_groups` (с `tools_available`), `tools_listed` / `tools_available`, `write_safety`, `resource_access`, `plugin_tools`, `telemetry`, `mcp_capable_plugins` (с `contract`).
+
+## Контракт MCP плагинов
+
+Расширение `BasePlugin`: entity CRUD, descriptors (`mcp_tools` / `mcp_resources` / `mcp_prompts` через `app.core.lib.mcp_contract`), `mcp_entity_revision`, `mcp_validate_entity`.
+
+MCPServer отдаёт фиксированные atomic tools `osys_plugin_*`.
+
+## Telemetry
+
+Каждый `tools/call` пишет duration_ms, ok/error, plugin, `correlation_id`. Доступно в `osys_health`, `osys_system_stats`, capabilities.
+
+`plugins_allowed` — whitelist имён плагинов с MCP-контрактом.
+
+Resource `osys://server/capabilities` — тот же payload, что и tool `osys_server_capabilities` (permissions, tool_groups, mcp_capable_plugins, resources, prompts).
+
+### Atomic plugin tools
+
+`osys_plugin_capabilities`, `osys_plugin_config_schema`, `osys_plugin_entity_schema`, `osys_plugin_list_entities`, `osys_plugin_get_entity`, `osys_plugin_search`, `osys_plugin_validate_entity_code`, `osys_plugin_run_entity_dry`, `osys_plugin_upsert_entity`, `osys_plugin_delete_entity`, `osys_plugin_invoke`.
+
+Эталонные реализации: **Mqtt** (`topics`, property-binding), **TelegramBot** (`commands`, `events`, `users`, `history`), **Todo** (`lists`, `tasks`), **Scheduler** (`tasks`, cron, code validation).
 
 ## Revision и конкурирующие правки
 
@@ -133,6 +163,9 @@ Read-only доступ к текстовым файлам в `app/` и `plugins/
 - `osys://method-runtime/symbols`
 - `osys://method-runtime/examples`
 - `osys://template/spec`
+- `osys://plugin/binding/spec`
+- `osys://plugin/{PluginName}` — capabilities JSON
+- `osys://plugin/{PluginName}/schema/{collection}` — entity schema
 
 Динамические:
 - `osys://object/<ObjectName>`
@@ -145,6 +178,7 @@ Read-only доступ к текстовым файлам в `app/` и `plugins/
 - `osys_object_overview`
 - `osys_method_authoring`
 - `osys_method_fix`
+- `osys_plugin_binding`
 
 ## Контракт runtime для кода методов
 

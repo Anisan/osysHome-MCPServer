@@ -43,8 +43,8 @@ MCPServer открывает endpoint `/api/mcp` для MCP JSON-RPC:
 | Параметр | Что делает |
 | :--- | :--- |
 | `Auth token` | Токен-авторизация MCP |
-| `allow_write_tools` | Разрешает `osys_set_property` |
-| `allow_method_calls` | Разрешает `osys_call_method` |
+| `allow_write_tools` | Разрешает `osys_write_property` |
+| `allow_method_calls` | Разрешает `osys_invoke_method` |
 | `allow_logs_access` | Разрешает `osys_list_logs`, `osys_read_log` (чувствительные данные) |
 | `allow_source_access` | Разрешает `osys_read_source`, `osys_search_source`, `osys_list_source` |
 | `allow_class_introspection` | Read-only интроспекция классов |
@@ -192,3 +192,4 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] В security audit фиксируются неуспешные попытки входа
 - [ ] `osys_search_docs` / `osys_get_doc` учитывают `docs_allowed_sources`
 - [ ] Source tools выключены, если не нужны явно
+- [ ] `tools/list` соответствует правам токена; полный каталог — `osys_server_capabilities`

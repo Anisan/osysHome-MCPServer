@@ -53,6 +53,10 @@ def handle_class_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
         class_name = (args.get("class_name") or "").strip()
         if not class_name:
             raise ValueError("class_name is required")
+        current = plugin._get_class_record(class_name)
+        if current is None:
+            raise ValueError(f"Class not found: {class_name}")
+        plugin._enforce_if_match((args.get("if_match") or "").strip() or None, plugin._revision_for_payload(current))
         update_kwargs: Dict[str, Any] = {"name": class_name, "update": True}
         if "description" in args:
             update_kwargs["description"] = plugin._safe_text_arg(args, "description")
@@ -64,7 +68,8 @@ def handle_class_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             rec = plugin._set_class_template(class_name, template)
             if rec is not None:
                 plugin._reload_objects_by_class_name(class_name)
-        return plugin._tool_result({"ok": rec is not None, "class": rec})
+        updated = plugin._get_class_record(class_name)
+        return plugin._tool_result({"ok": rec is not None, "class": rec, "revision": plugin._revision_for_payload(updated or {})})
     if tool_name == "osys_delete_class":
         plugin._require_permission("allow_manage_classes", "Class management tools are disabled")
         class_name = (args.get("class_name") or "").strip()
@@ -119,6 +124,54 @@ def handle_class_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
                     }
                 )
         return plugin._tool_result({"count": len(items), "items": items})
+    if tool_name == "osys_get_class_tree":
+        plugin._require_permission("allow_class_introspection", "Class introspection tools are disabled")
+        root_class_name = (args.get("root_class_name") or "").strip() or None
+        include_templates = bool(args.get("include_templates", False))
+        max_depth = plugin._safe_int(args.get("max_depth"), 100, 1, 1000)
+        with session_scope() as session:
+            rows = session.query(Class).order_by(Class.name).all()
+            by_id = {}
+            children = {}
+            for row in rows:
+                node = {
+                    "id": row.id,
+                    "name": row.name,
+                    "description": row.description or "",
+                    "parent_id": row.parent_id,
+                }
+                if include_templates:
+                    node["template"] = row.template or ""
+                by_id[row.id] = node
+                children.setdefault(row.parent_id, []).append(row.id)
+
+        if root_class_name:
+            root = next((node for node in by_id.values() if node["name"] == root_class_name), None)
+            if root is None:
+                raise ValueError(f"Class not found: {root_class_name}")
+            root_ids = [root["id"]]
+        else:
+            root_ids = sorted(children.get(None, []), key=lambda cid: by_id[cid]["name"].lower())
+
+        def build_subtree(class_id: int, depth: int):
+            node = dict(by_id[class_id])
+            node["depth"] = depth
+            if depth >= max_depth:
+                node["children"] = []
+                node["truncated"] = True
+                return node
+            child_ids = sorted(children.get(class_id, []), key=lambda cid: by_id[cid]["name"].lower())
+            node["children"] = [build_subtree(cid, depth + 1) for cid in child_ids]
+            node["truncated"] = False
+            return node
+
+        roots = [build_subtree(cid, 0) for cid in root_ids]
+        return plugin._tool_result(
+            {
+                "count": len(by_id),
+                "roots": roots,
+            }
+        )
     if tool_name == "osys_get_class_full":
         plugin._require_permission("allow_class_introspection", "Class introspection tools are disabled")
         class_name = (args.get("class_name") or "").strip()
@@ -207,6 +260,7 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "description": {"type": "string"},
                     "parent_id": {"type": "integer"},
                     "template": {"type": "string"},
+                    "if_match": {"type": "string"},
                 },
                 "required": ["class_name"],
             },
@@ -229,6 +283,18 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                 "properties": {
                     "query": {"type": "string"},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 5000},
+                },
+            },
+        },
+        {
+            "name": "osys_get_class_tree",
+            "description": "Get class inheritance tree",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "root_class_name": {"type": "string"},
+                    "max_depth": {"type": "integer", "minimum": 1, "maximum": 1000},
+                    "include_templates": {"type": "boolean"},
                 },
             },
         },
