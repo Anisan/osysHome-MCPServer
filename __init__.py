@@ -131,7 +131,6 @@ class MCPServer(BasePlugin):
         )
         @handle_admin_required
         def admin_plugin_tools(plugin_name: str):
-            self.loadConfig()
             entry = get_plugin_mcp_tools_catalog_entry(self, plugin_name)
             if entry is None:
                 return jsonify(
@@ -160,7 +159,6 @@ class MCPServer(BasePlugin):
         )
         @handle_admin_required
         def admin_permission_category(config_key: str):
-            self.loadConfig()
             category = get_permission_category_catalog(self, config_key)
             if category is None:
                 return jsonify(
@@ -181,10 +179,7 @@ class MCPServer(BasePlugin):
             )
 
     def admin(self, request):
-        if request.method == "GET":
-            self.loadConfig()
-        elif request.method == "POST":
-            self.loadConfig()
+        if request.method == "POST":
             clear_auth_token = request.form.get("clear_auth_token") == "on"
             entered_token = request.form.get("auth_token", "").strip()
             if clear_auth_token:
