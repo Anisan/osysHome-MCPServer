@@ -8,6 +8,7 @@ import json
 from typing import Any, List, Optional
 
 from app.core.lib.common import callPluginFunction, getModule
+from app.core.lib.mcp_contract import build_plugin_mcp_descriptors
 from app.core.lib.object import getHistory, getObject, getProperty, removeLinkFromObject, setLinkToObject
 from app.core.lib.plugin_binding import sync_object_link, sync_property_link
 from app.core.main.PluginsHelper import plugins as active_plugins
@@ -157,6 +158,351 @@ def list_mcp_capable_plugins() -> List[dict]:
                 }
             )
     return items
+
+
+def _operation_catalog_entry(operation: str, operation_schemas: dict) -> dict:
+    schema = operation_schemas.get(operation) if isinstance(operation_schemas, dict) else None
+    description = ""
+    if isinstance(schema, dict):
+        description = str(schema.get("description") or "").strip()
+    return {
+        "name": operation,
+        "description": description,
+        "tool": "osys_plugin_invoke",
+        "access": "write",
+    }
+
+
+def _collection_entity_tools(collection: dict) -> List[dict]:
+    collection_id = str(collection.get("id") or "").strip()
+    if not collection_id:
+        return []
+
+    tools: List[dict] = [
+        {
+            "name": "osys_plugin_entity_schema",
+            "description": f"JSON schema for collection '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+        {
+            "name": "osys_plugin_list_entities",
+            "description": f"List entities in '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+        {
+            "name": "osys_plugin_get_entity",
+            "description": f"Get one entity from '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+        {
+            "name": "osys_plugin_export_entities",
+            "description": f"Export entities from '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+        {
+            "name": "osys_plugin_validate_entity",
+            "description": f"Validate entity payload for '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+        {
+            "name": "osys_plugin_diff_entity",
+            "description": f"Preview entity changes in '{collection_id}'",
+            "access": "read",
+            "collection": collection_id,
+        },
+    ]
+
+    writable = bool(collection.get("writable", True))
+    creatable = collection.get("creatable")
+    deletable = collection.get("deletable")
+    if writable and creatable is not False:
+        tools.append(
+            {
+                "name": "osys_plugin_upsert_entity",
+                "description": f"Create or update entity in '{collection_id}'",
+                "access": "write",
+                "collection": collection_id,
+            }
+        )
+        tools.append(
+            {
+                "name": "osys_plugin_import_entities",
+                "description": f"Bulk import into '{collection_id}'",
+                "access": "write",
+                "collection": collection_id,
+            }
+        )
+    if writable and deletable is not False:
+        tools.append(
+            {
+                "name": "osys_plugin_delete_entity",
+                "description": f"Delete entity from '{collection_id}'",
+                "access": "write",
+                "collection": collection_id,
+            }
+        )
+    if collection.get("has_code"):
+        tools.extend(
+            [
+                {
+                    "name": "osys_plugin_validate_entity_code",
+                    "description": f"Validate Python code for '{collection_id}'",
+                    "access": "read",
+                    "collection": collection_id,
+                },
+                {
+                    "name": "osys_plugin_run_entity_dry",
+                    "description": f"Dry-run Python code for '{collection_id}'",
+                    "access": "write",
+                    "collection": collection_id,
+                },
+            ]
+        )
+    return tools
+
+
+def _normalize_mcp_notes(notes: Any) -> List[str]:
+    if not notes:
+        return []
+    if isinstance(notes, str):
+        text = notes.strip()
+        return [text] if text else []
+    if isinstance(notes, list):
+        return [str(item).strip() for item in notes if str(item).strip()]
+    text = str(notes).strip()
+    return [text] if text else []
+
+
+def _estimate_plugin_tool_count(caps: dict, instance) -> int:
+    collections = [item for item in (caps.get("collections") or []) if isinstance(item, dict)]
+    count = 2
+    if caps.get("config_schema"):
+        count += 1
+    if "search" in (getattr(instance, "actions", []) or []):
+        count += 1
+    binding_modes = {
+        str(item.get("binding_mode") or "none").strip().lower() for item in collections
+    }
+    if binding_modes & {"property", "object"}:
+        count += 1
+    for collection in collections:
+        count += len(_collection_entity_tools(collection))
+    count += len([item for item in (caps.get("operations") or []) if str(item).strip()])
+    try:
+        count += len(instance.mcp_tools() or [])
+    except Exception:
+        pass
+    return count
+
+
+def _entity_tool_names_from_caps(caps: dict) -> List[str]:
+    names = set()
+    for collection in caps.get("collections") or []:
+        if not isinstance(collection, dict):
+            continue
+        for tool in _collection_entity_tools(collection):
+            names.add(tool["name"])
+    return sorted(names)
+
+
+def _build_plugin_mcp_tools_entry(mcp_server_plugin, base_entry: dict) -> Optional[dict]:
+    plugin_name = str(base_entry.get("name") or "").strip()
+    if not plugin_name:
+        return None
+
+    instance = getModule(plugin_name)
+    if instance is None:
+        return None
+
+    allowed = set(plugins_allowed_list(mcp_server_plugin))
+
+    try:
+        caps = _instance_mcp_capabilities(instance)
+    except Exception:
+        caps = {}
+
+    collections = [item for item in (caps.get("collections") or []) if isinstance(item, dict)]
+    operation_schemas = caps.get("operation_schemas") or {}
+    operations = [
+        _operation_catalog_entry(str(item).strip(), operation_schemas)
+        for item in (caps.get("operations") or [])
+        if str(item).strip()
+    ]
+
+    plugin_tools: List[dict] = [
+        {
+            "name": "osys_plugin_capabilities",
+            "description": "Plugin MCP capabilities and collections",
+            "access": "read",
+        },
+    ]
+    if caps.get("config_schema"):
+        plugin_tools.append(
+            {
+                "name": "osys_plugin_config_schema",
+                "description": "Plugin configuration JSON schema",
+                "access": "read",
+            }
+        )
+    if "search" in (getattr(instance, "actions", []) or []):
+        plugin_tools.append(
+            {
+                "name": "osys_plugin_search",
+                "description": "Plugin full-text search",
+                "access": "read",
+            }
+        )
+    plugin_tools.append(
+        {
+            "name": "osys_plugin_batch",
+            "description": "Run multiple plugin actions in one call",
+            "access": "write",
+        }
+    )
+
+    collection_tools: List[dict] = []
+    binding_modes = set()
+    for collection in collections:
+        binding_modes.add(str(collection.get("binding_mode") or "none").strip().lower())
+        collection_tools.extend(_collection_entity_tools(collection))
+
+    if binding_modes & {"property", "object"}:
+        plugin_tools.append(
+            {
+                "name": "osys_bind_device",
+                "description": "Upsert entity and sync object/property binding",
+                "access": "write",
+            }
+        )
+
+    descriptors = {"tools": [], "resources": [], "prompts": []}
+    try:
+        tools, resources, prompts = build_plugin_mcp_descriptors(plugin_name, caps)
+        descriptors = {
+            "tools": tools or [],
+            "resources": resources or [],
+            "prompts": prompts or [],
+        }
+    except Exception:
+        pass
+
+    extra_tools: List[dict] = []
+    try:
+        for item in instance.mcp_tools() or []:
+            if not isinstance(item, dict):
+                continue
+            extra_tools.append(
+                {
+                    "id": str(item.get("id") or item.get("name") or "").strip(),
+                    "kind": str(item.get("kind") or "tool").strip(),
+                    "title": str(item.get("title") or item.get("name") or "").strip(),
+                    "description": str(item.get("description") or "").strip(),
+                }
+            )
+    except Exception:
+        pass
+
+    entity_tool_names = {item["name"] for item in collection_tools}
+    operation_names = {item["name"] for item in operations}
+    all_tools = (
+        len(plugin_tools)
+        + len(collection_tools)
+        + len(operations)
+        + len(extra_tools)
+    )
+
+    return {
+        **base_entry,
+        "allowed": plugin_name in allowed,
+        "notes": _normalize_mcp_notes(caps.get("notes")),
+        "plugin_tools": plugin_tools,
+        "collections": collections,
+        "collection_tools": collection_tools,
+        "operations": operations,
+        "descriptors": descriptors,
+        "extra_tools": extra_tools,
+        "tool_count": all_tools,
+        "entity_tool_names": sorted(entity_tool_names),
+        "operation_names": sorted(operation_names),
+    }
+
+
+def build_plugin_mcp_tools_summary(mcp_server_plugin) -> List[dict]:
+    """Build lightweight MCP plugin list for admin cards (no full tool payloads)."""
+    allowed = set(plugins_allowed_list(mcp_server_plugin))
+    summaries: List[dict] = []
+
+    for entry in list_mcp_capable_plugins():
+        plugin_name = str(entry.get("name") or "").strip()
+        if not plugin_name:
+            continue
+
+        instance = getModule(plugin_name)
+        if instance is None:
+            continue
+
+        try:
+            caps = _instance_mcp_capabilities(instance)
+        except Exception:
+            caps = {}
+
+        collection_ids = list(entry.get("collections") or [])
+        operation_names = sorted(
+            str(item).strip()
+            for item in (caps.get("operations") or [])
+            if str(item).strip()
+        )
+
+        summaries.append(
+            {
+                **entry,
+                "allowed": plugin_name in allowed,
+                "tool_count": _estimate_plugin_tool_count(caps, instance),
+                "collections_count": len(collection_ids),
+                "operations_count": len(operation_names),
+                "operation_names": operation_names,
+                "entity_tool_names": _entity_tool_names_from_caps(caps),
+            }
+        )
+
+    return summaries
+
+
+def get_plugin_mcp_tools_catalog_entry(mcp_server_plugin, plugin_name: str) -> Optional[dict]:
+    """Build full MCP tools catalog entry for one plugin."""
+    plugin_name = str(plugin_name or "").strip()
+    if not plugin_name:
+        return None
+
+    base_entry = None
+    for entry in list_mcp_capable_plugins():
+        if str(entry.get("name") or "").strip() == plugin_name:
+            base_entry = entry
+            break
+    if base_entry is None:
+        return None
+
+    return _build_plugin_mcp_tools_entry(mcp_server_plugin, base_entry)
+
+
+def build_plugin_mcp_tools_catalog(mcp_server_plugin) -> List[dict]:
+    """Build admin catalog of MCP tools exposed by each MCP-capable plugin."""
+    catalog: List[dict] = []
+
+    for entry in list_mcp_capable_plugins():
+        plugin_name = str(entry.get("name") or "").strip()
+        if not plugin_name:
+            continue
+        item = _build_plugin_mcp_tools_entry(mcp_server_plugin, entry)
+        if item is not None:
+            catalog.append(item)
+
+    return catalog
 
 
 def _get_plugin_row(plugin_name: str) -> Optional[dict]:
@@ -709,27 +1055,7 @@ def _dispatch_atomic_plugin_tool(plugin, tool_name: str, args: dict) -> dict:
     if not plugin_name:
         raise ValueError("plugin is required")
 
-    action_args = {}
-    for key in (
-        "collection",
-        "entity_id",
-        "query",
-        "limit",
-        "payload",
-        "code",
-        "context",
-        "operation",
-        "params",
-        "if_match",
-        "steps",
-        "stop_on_error",
-        "items",
-        "mode",
-        "dry_run",
-        "entity_ids",
-    ):
-        if key in args:
-            action_args[key] = args.get(key)
+    action_args = {key: value for key, value in args.items() if key != "plugin"}
 
     dispatch_args = {
         "plugin": plugin_name,
@@ -1144,6 +1470,7 @@ def get_tool_schemas(_property_params_schema) -> list[dict]:
             "description": "List plugin entities",
             "inputSchema": {
                 "type": "object",
+                "additionalProperties": True,
                 "properties": {
                     "plugin": {"type": "string"},
                     "collection": {"type": "string"},
@@ -1151,6 +1478,9 @@ def get_tool_schemas(_property_params_schema) -> list[dict]:
                     "limit": {"type": "integer", "minimum": 1, "maximum": 5000},
                     "list_id": {"type": "integer"},
                     "active_only": {"type": "boolean"},
+                    "linked_object": {"type": "string"},
+                    "has_binding": {"type": "boolean"},
+                    "device_id": {"type": "integer"},
                 },
                 "required": ["plugin", "collection"],
             },

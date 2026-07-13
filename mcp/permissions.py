@@ -50,12 +50,6 @@ TOOL_GROUPS: List[dict] = [
         "tools": ["osys_read_source", "osys_search_source", "osys_list_source"],
     },
     {
-        "id": "docs",
-        "title": "Documentation search",
-        "permission": "allow_docs_access",
-        "tools": ["osys_search_docs", "osys_get_doc"],
-    },
-    {
         "id": "class_introspection",
         "title": "Class introspection",
         "permission": "allow_class_introspection",
@@ -217,8 +211,6 @@ _TOOL_PERMISSION_MAP = _build_tool_permission_map()
 def permission_enabled(plugin, permission_key: str | None) -> bool:
     if permission_key is None:
         return True
-    if permission_key == "allow_docs_access":
-        return bool(plugin._docs_available()) and bool(plugin.config.get("allow_docs_access", False))
     return bool(plugin.config.get(permission_key, False))
 
 
@@ -320,3 +312,215 @@ def plugin_is_whitelisted(plugin, plugin_name: str) -> bool:
     if not allowed:
         return False
     return plugin_name in allowed
+
+
+PERMISSION_ADMIN_CARDS: Dict[str, dict] = {
+    "allow_write_tools": {
+        "title": "Write properties",
+        "risk": "medium",
+        "risk_label": "Medium",
+        "description": "Change object property values via MCP.",
+    },
+    "allow_method_calls": {
+        "title": "Invoke methods",
+        "risk": "medium",
+        "risk_label": "Medium",
+        "description": "Run object/class methods remotely.",
+    },
+    "allow_logs_access": {
+        "title": "Logs access",
+        "risk": "high",
+        "risk_label": "High",
+        "description": "May expose sensitive runtime data from application logs and audit trail.",
+    },
+    "allow_source_access": {
+        "title": "Source code (read-only)",
+        "risk": "high",
+        "risk_label": "High",
+        "description": "Browse and search application source files.",
+    },
+    "allow_class_introspection": {
+        "title": "Class introspection",
+        "risk": "low",
+        "risk_label": "Low",
+        "description": "Read class definitions, hierarchy, and metadata.",
+    },
+    "allow_manage_classes": {
+        "title": "Class management",
+        "risk": "critical",
+        "risk_label": "Critical",
+        "description": "Create, modify, or delete classes in the object model.",
+    },
+    "allow_manage_objects": {
+        "title": "Object management",
+        "risk": "critical",
+        "risk_label": "Critical",
+        "description": "Create, update, or remove objects and their runtime state.",
+    },
+    "allow_manage_properties": {
+        "title": "Property management",
+        "risk": "critical",
+        "risk_label": "Critical",
+        "description": "Manage class/object property schema and remove obsolete fields.",
+    },
+    "allow_manage_methods": {
+        "title": "Method management",
+        "risk": "critical",
+        "risk_label": "Critical",
+        "description": "Create, validate, and delete method implementations in objects/classes.",
+    },
+    "allow_read_plugins": {
+        "title": "Plugin read tools",
+        "risk": "low",
+        "risk_label": "Low",
+        "description": "List plugins, read config, list and inspect plugin entities.",
+        "notes": [
+            "Each call also requires the target plugin to be in plugins_allowed whitelist.",
+        ],
+    },
+    "allow_manage_plugins": {
+        "title": "Plugin write tools",
+        "risk": "high",
+        "risk_label": "High",
+        "description": "Update plugin config, manage entities, invoke plugin actions.",
+        "notes": [
+            "Each call also requires the target plugin to be in plugins_allowed whitelist.",
+        ],
+    },
+}
+
+
+def _tool_names_for_config_key(config_key: str) -> List[str]:
+    names: List[str] = []
+    seen = set()
+    for group in TOOL_GROUPS:
+        if group.get("permission") == config_key:
+            for tool_name in group.get("tools") or []:
+                tool_name = str(tool_name).strip()
+                if tool_name and tool_name not in seen:
+                    seen.add(tool_name)
+                    names.append(tool_name)
+    return names
+
+
+def _tool_schema_map(plugin) -> Dict[str, str]:
+    from plugins.MCPServer.mcp.tools_schema import build_tools_schema
+
+    schema = build_tools_schema(plugin._property_params_schema())
+    mapping: Dict[str, str] = {}
+    for item in schema:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        mapping[name] = str(item.get("description") or "").strip()
+    return mapping
+
+
+DEFAULT_ACCESS_CONFIG_KEY = "default_access"
+
+DEFAULT_ACCESS_META = {
+    "title": "Default access",
+    "risk": "low",
+    "risk_label": "Low",
+    "description": "Core read and server tools available without enabling permission toggles.",
+    "notes": [
+        "Still requires a valid MCP auth token when authentication is configured.",
+        "Plugin-specific tools require separate plugin read permission and whitelist.",
+    ],
+}
+
+
+def _default_access_groups(schema_map: Dict[str, str]) -> List[dict]:
+    groups: List[dict] = []
+    for group in TOOL_GROUPS:
+        if group.get("permission") is not None:
+            continue
+        tools = [
+            {
+                "name": str(tool_name).strip(),
+                "description": schema_map.get(str(tool_name).strip(), ""),
+            }
+            for tool_name in (group.get("tools") or [])
+            if str(tool_name).strip()
+        ]
+        if not tools:
+            continue
+        groups.append(
+            {
+                "id": group.get("id"),
+                "title": group.get("title") or group.get("id"),
+                "tools": tools,
+                "tool_count": len(tools),
+            }
+        )
+    return groups
+
+
+def _build_default_access_catalog(plugin) -> dict:
+    schema_map = _tool_schema_map(plugin)
+    groups = _default_access_groups(schema_map)
+    tools: List[dict] = []
+    seen = set()
+    for group in groups:
+        for tool in group.get("tools") or []:
+            name = str(tool.get("name") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            tools.append(tool)
+
+    meta = DEFAULT_ACCESS_META
+    return {
+        "id": DEFAULT_ACCESS_CONFIG_KEY,
+        "title": meta.get("title") or DEFAULT_ACCESS_CONFIG_KEY,
+        "description": meta.get("description", ""),
+        "risk": meta.get("risk"),
+        "risk_label": meta.get("risk_label"),
+        "permission_key": None,
+        "enabled": True,
+        "always_on": True,
+        "tools": tools,
+        "groups": groups,
+        "tool_count": len(tools),
+        "notes": list(meta.get("notes") or []),
+    }
+
+
+def get_permission_category_catalog(plugin, config_key: str) -> Optional[dict]:
+    """Build MCP tools catalog for one admin permission category."""
+    config_key = str(config_key or "").strip()
+    if config_key == DEFAULT_ACCESS_CONFIG_KEY:
+        return _build_default_access_catalog(plugin)
+
+    meta = PERMISSION_ADMIN_CARDS.get(config_key)
+    if not meta:
+        return None
+
+    tool_names = _tool_names_for_config_key(config_key)
+    if not tool_names:
+        return None
+
+    schema_map = _tool_schema_map(plugin)
+    tools = [
+        {
+            "name": name,
+            "description": schema_map.get(name, ""),
+        }
+        for name in tool_names
+    ]
+
+    enabled = permission_enabled(plugin, config_key)
+    notes = list(meta.get("notes") or [])
+
+    return {
+        "id": config_key,
+        "title": meta.get("title") or config_key,
+        "description": meta.get("description", ""),
+        "risk": meta.get("risk"),
+        "risk_label": meta.get("risk_label"),
+        "permission_key": config_key,
+        "enabled": enabled,
+        "tools": tools,
+        "tool_count": len(tools),
+        "notes": notes,
+    }

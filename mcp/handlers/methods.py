@@ -6,6 +6,41 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from app.core.lib.object import addClassMethod, addObjectMethod, deleteClassMethod
+from plugins.MCPServer.core import utils as mcp_utils
+
+
+def _resolve_method_params(
+    args: dict,
+    existing: Optional[dict],
+    *,
+    update_mode: bool,
+    merge_params: bool = True,
+) -> Optional[Dict[str, Any]]:
+    """Return params dict to pass to add*Method, or None to leave unchanged in DB."""
+    params_patch = args.get("params")
+    if params_patch is not None and not isinstance(params_patch, dict):
+        raise ValueError("params must be an object")
+    existing_params = (existing or {}).get("params") or {}
+    if not isinstance(existing_params, dict):
+        existing_params = {}
+
+    if params_patch is None:
+        if update_mode and existing is not None:
+            return existing_params
+        return None
+
+    if update_mode and merge_params:
+        params_arg = dict(existing_params)
+        params_arg.update(params_patch)
+    else:
+        params_arg = params_patch
+    mcp_utils.validate_method_params(params_arg)
+    return params_arg
+
+
+def _apply_method_params_kwarg(method_kwargs: Dict[str, Any], params: Optional[Dict[str, Any]]) -> None:
+    if params is not None:
+        method_kwargs["params"] = params
 
 
 def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
@@ -24,6 +59,7 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             "name": name,
             "description": rec.get("description") or "",
             "call_parent": rec.get("call_parent"),
+            "params": rec.get("params") or {},
             "has_code": bool(rec.get("code")),
             "code": rec.get("code") or "",
             "method_runtime_spec_uri": "osys://method-runtime/spec",
@@ -45,6 +81,7 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             "name": name,
             "description": rec.get("description") or "",
             "call_parent": rec.get("call_parent"),
+            "params": rec.get("params") or {},
             "has_code": bool(rec.get("code")),
             "code": rec.get("code") or "",
             "method_runtime_spec_uri": "osys://method-runtime/spec",
@@ -62,6 +99,7 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             args.get("code_mode"),
         )
         update_mode = bool(args.get("update", False))
+        existing = plugin._get_class_method_record(class_name, name) if update_mode else None
         method_kwargs: Dict[str, Any] = {
             "name": name,
             "class_name": class_name,
@@ -73,6 +111,8 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             method_kwargs["code"] = prepared_code
         if "call_parent" in args or not update_mode:
             method_kwargs["call_parent"] = plugin._safe_int(args.get("call_parent"), 0, -1, 1)
+        params = _resolve_method_params(args, existing, update_mode=update_mode, merge_params=False)
+        _apply_method_params_kwarg(method_kwargs, params)
         method = addClassMethod(**method_kwargs)
         if method is not None:
             plugin._reload_objects_by_class_name(class_name)
@@ -106,14 +146,18 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             if "description" in args
             else str(existing.get("description") or "")
         )
-        method = addClassMethod(
-            name=name,
-            class_name=class_name,
-            description=description,
-            code=prepared_code,
-            call_parent=plugin._safe_int(args.get("call_parent"), int(existing.get("call_parent") or 0), -1, 1),
-            update=True,
-        )
+        merge_params = bool(args.get("merge_params", True))
+        params = _resolve_method_params(args, existing, update_mode=True, merge_params=merge_params)
+        method_kwargs: Dict[str, Any] = {
+            "name": name,
+            "class_name": class_name,
+            "description": description,
+            "code": prepared_code,
+            "call_parent": plugin._safe_int(args.get("call_parent"), int(existing.get("call_parent") or 0), -1, 1),
+            "update": True,
+        }
+        _apply_method_params_kwarg(method_kwargs, params)
+        method = addClassMethod(**method_kwargs)
         if method is not None:
             plugin._reload_objects_by_class_name(class_name)
         updated = plugin._get_class_method_record(class_name, name)
@@ -151,6 +195,7 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             args.get("code_mode"),
         )
         update_mode = bool(args.get("update", False))
+        existing = plugin._get_object_method_record(object_name, name) if update_mode else None
         method_kwargs: Dict[str, Any] = {
             "name": name,
             "object_name": object_name,
@@ -162,6 +207,8 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             method_kwargs["code"] = prepared_code
         if "call_parent" in args or not update_mode:
             method_kwargs["call_parent"] = plugin._safe_int(args.get("call_parent"), 0, -1, 1)
+        params = _resolve_method_params(args, existing, update_mode=update_mode, merge_params=False)
+        _apply_method_params_kwarg(method_kwargs, params)
         success = addObjectMethod(**method_kwargs)
         if success:
             plugin._reload_object_by_name(object_name)
@@ -202,14 +249,18 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
             if "description" in args
             else str(existing.get("description") or "")
         )
-        success = addObjectMethod(
-            name=name,
-            object_name=object_name,
-            description=description,
-            code=prepared_code,
-            call_parent=plugin._safe_int(args.get("call_parent"), int(existing.get("call_parent") or 0), -1, 1),
-            update=True,
-        )
+        merge_params = bool(args.get("merge_params", True))
+        params = _resolve_method_params(args, existing, update_mode=True, merge_params=merge_params)
+        method_kwargs: Dict[str, Any] = {
+            "name": name,
+            "object_name": object_name,
+            "description": description,
+            "code": prepared_code,
+            "call_parent": plugin._safe_int(args.get("call_parent"), int(existing.get("call_parent") or 0), -1, 1),
+            "update": True,
+        }
+        _apply_method_params_kwarg(method_kwargs, params)
+        success = addObjectMethod(**method_kwargs)
         if success:
             plugin._reload_object_by_name(object_name)
         updated = plugin._get_object_method_record(object_name, name)
@@ -225,6 +276,7 @@ def handle_method_tools(plugin, tool_name: str, args: dict) -> Optional[dict]:
 
 
 def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
+    method_params_schema = mcp_utils.method_params_schema()
     return [
         {
             "name": "osys_get_class_method_code",
@@ -246,7 +298,7 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
         },
         {
             "name": "osys_add_class_method",
-            "description": "Create or update a class method",
+            "description": "Create or update a class method (optional display params: icon, color, sort_order)",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -256,6 +308,7 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "code": {"type": "string"},
                     "code_mode": {"type": "string"},
                     "call_parent": {"type": "integer"},
+                    "params": method_params_schema,
                     "update": {"type": "boolean"},
                 },
                 "required": ["class_name", "name"],
@@ -273,6 +326,8 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "code": {"type": "string"},
                     "code_mode": {"type": "string"},
                     "call_parent": {"type": "integer"},
+                    "params": method_params_schema,
+                    "merge_params": {"type": "boolean"},
                     "if_match": {"type": "string"},
                 },
                 "required": ["class_name", "name"],
@@ -293,7 +348,7 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
         },
         {
             "name": "osys_add_object_method",
-            "description": "Create or update an object method with code",
+            "description": "Create or update an object method with code (optional display params: icon, color, sort_order)",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -303,6 +358,7 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "code": {"type": "string"},
                     "code_mode": {"type": "string"},
                     "call_parent": {"type": "integer"},
+                    "params": method_params_schema,
                     "update": {"type": "boolean"},
                 },
                 "required": ["object_name", "name"],
@@ -320,6 +376,8 @@ def get_tool_schemas(_: Dict[str, Any]) -> list[dict]:
                     "code": {"type": "string"},
                     "code_mode": {"type": "string"},
                     "call_parent": {"type": "integer"},
+                    "params": method_params_schema,
+                    "merge_params": {"type": "boolean"},
                     "if_match": {"type": "string"},
                 },
                 "required": ["object_name", "name"],

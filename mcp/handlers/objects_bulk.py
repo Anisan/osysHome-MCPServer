@@ -196,6 +196,10 @@ def handle_bulk_and_delete_tools(plugin, tool_name: str, args: dict) -> Optional
 
 
 def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
+    from plugins.MCPServer.core import utils as mcp_utils
+
+    method_params_schema = mcp_utils.method_params_schema()
+    _ = property_params_schema
     return [
         {
             "name": "osys_add_object",
@@ -272,6 +276,8 @@ def get_tool_schemas(property_params_schema: Dict[str, Any]) -> list[dict]:
                                 "code": {"type": "string"},
                                 "code_mode": {"type": "string"},
                                 "call_parent": {"type": "integer"},
+                                "params": method_params_schema,
+                                "merge_params": {"type": "boolean"},
                                 "if_match": {"type": "string"},
                             },
                             "required": ["name"],

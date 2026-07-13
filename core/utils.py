@@ -255,6 +255,30 @@ def validate_property_params(params: Dict[str, Any]) -> None:
         raise ValueError("params.allowed_values must be an array")
 
 
+def method_params_schema() -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "description": "Display metadata for method lists and object cards (Objects module)",
+        "properties": {
+            "icon": {"type": "string", "description": "Icon class or iconify id (e.g. mdi:play)"},
+            "color": {"type": "string", "description": "Row/card accent color (hex)"},
+            "sort_order": {"type": "integer", "description": "Sort order in method lists (lower = higher)"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def validate_method_params(params: Dict[str, Any]) -> None:
+    if not isinstance(params, dict):
+        raise ValueError("params must be an object")
+    allowed = {"icon", "color", "sort_order"}
+    unknown = set(params.keys()) - allowed
+    if unknown:
+        raise ValueError(f"Unsupported method params keys: {', '.join(sorted(unknown))}")
+    if "sort_order" in params and params["sort_order"] is not None and not isinstance(params["sort_order"], int):
+        raise ValueError("params.sort_order must be an integer")
+
+
 def revision_for_payload(payload: Any) -> str:
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]

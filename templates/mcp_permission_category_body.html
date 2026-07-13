@@ -1,0 +1,77 @@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  {% if category.risk_label %}
+    <span class="badge {% if category.risk == 'low' %}bg-success{% elif category.risk == 'medium' %}bg-warning text-dark{% elif category.risk == 'critical' %}bg-danger{% else %}bg-danger{% endif %}">
+      {{ category.risk_label }} risk
+    </span>
+  {% endif %}
+  {% if category.always_on %}
+    <span class="badge bg-success">Always available</span>
+  {% elif category.enabled %}
+    <span class="badge bg-success">Permission enabled</span>
+  {% else %}
+    <span class="badge bg-secondary">Permission disabled</span>
+  {% endif %}
+</div>
+
+{% if category.description %}
+  <p class="text-muted small mb-2">{{ category.description }}</p>
+{% endif %}
+
+{% if category.notes %}
+  <div class="alert alert-light border py-2 px-3 small mb-3" role="alert">
+    <div class="fw-semibold mb-1">Notes</div>
+    <ul class="mb-0 ps-3">
+      {% for note in category.notes %}
+        <li>{{ note }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if category.groups %}
+  {% for group in category.groups %}
+    <div class="mcp-catalog-collection">
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+        <div class="fw-semibold small">{{ group.title }}</div>
+        <span class="badge bg-light text-dark border">{{ group.tool_count }}</span>
+      </div>
+      <div class="mcp-tool-list">
+        {% for tool in group.tools %}
+          <span class="mcp-tool-name" title="{{ tool.description or tool.name }}">{{ tool.name }}</span>
+        {% endfor %}
+      </div>
+      {% if group.tools %}
+        <div class="mt-2">
+          {% for tool in group.tools %}
+            {% if tool.description %}
+              <div class="mcp-catalog-op">
+                <code>{{ tool.name }}</code>
+                <span class="text-muted small ms-1">{{ tool.description }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="mcp-catalog-section-title">MCP tools ({{ category.tool_count }})</div>
+  <div class="mcp-tool-list">
+    {% for tool in category.tools %}
+      <span class="mcp-tool-name" title="{{ tool.description or tool.name }}">{{ tool.name }}</span>
+    {% endfor %}
+  </div>
+
+  {% if category.tools %}
+    <div class="mt-3">
+      {% for tool in category.tools %}
+        {% if tool.description %}
+          <div class="mcp-catalog-op">
+            <code>{{ tool.name }}</code>
+            <span class="text-muted small ms-1">{{ tool.description }}</span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endif %}

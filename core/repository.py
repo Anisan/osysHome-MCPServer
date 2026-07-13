@@ -80,7 +80,7 @@ def get_class_record(class_name: str) -> Optional[Dict[str, Any]]:
                     "description": m.description or "",
                     "call_parent": m.call_parent,
                     "has_code": bool(m.code),
-                    "exec_params": parse_json_object(getattr(m, "exec_params", None)),
+                    "params": parse_json_object(m.params),
                 }
                 for m in methods
             ],
@@ -143,6 +143,7 @@ def get_class_method_record(class_name: str, method_name: str) -> Optional[Dict[
             "description": rec.description,
             "code": rec.code,
             "call_parent": rec.call_parent,
+            "params": parse_json_object(rec.params),
         }
 
 
@@ -232,6 +233,7 @@ def get_inherited_class_method_for_object(object_name: str, method_name: str) ->
             "description": rec.description,
             "code": rec.code,
             "call_parent": rec.call_parent,
+            "params": parse_json_object(rec.params),
         }
 
 
@@ -292,6 +294,7 @@ def get_class_full_record(class_name: str) -> Optional[Dict[str, Any]]:
                     "description": method.description or "",
                     "call_parent": method.call_parent,
                     "has_code": bool(method.code),
+                    "params": parse_json_object(method.params),
                     "source_class": node.name,
                 }
 
@@ -322,6 +325,7 @@ def get_class_full_record(class_name: str) -> Optional[Dict[str, Any]]:
                     "description": method.description or "",
                     "call_parent": method.call_parent,
                     "has_code": bool(method.code),
+                    "params": parse_json_object(method.params),
                 }
                 for method in own_methods
             ],
@@ -351,6 +355,7 @@ def get_object_method_record(object_name: str, method_name: str) -> Optional[Dic
             "description": rec.description,
             "code": rec.code,
             "call_parent": rec.call_parent,
+            "params": parse_json_object(rec.params),
         }
 
 

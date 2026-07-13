@@ -17,7 +17,6 @@ from jinja2 import Environment, TemplateSyntaxError, meta
 
 from app.core.main.BasePlugin import BasePlugin
 from app.core.lib.constants import PropertyType
-from app.core.lib.common import getModule
 from app.logging_config import security_audit_log
 from app.core.lib.object import (
     addClass,
@@ -41,7 +40,20 @@ from app.core.models.Clasess import Class, Method, Object, Property
 from app.core.main.ObjectsStorage import objects_storage
 from app.database import session_scope
 from plugins.MCPServer.mcp.handlers.common import tools_call as dispatch_tools_call
-from plugins.MCPServer.mcp.handlers.plugins import list_mcp_capable_plugins
+from plugins.MCPServer.mcp.logging_support import (
+    log_rpc_error,
+    log_rpc_exception,
+    log_rpc_request,
+    log_rpc_result,
+)
+from plugins.MCPServer.mcp.handlers.plugins import (
+    get_plugin_mcp_tools_catalog_entry,
+    list_mcp_capable_plugins,
+)
+from plugins.MCPServer.mcp.permissions import (
+    DEFAULT_ACCESS_CONFIG_KEY,
+    get_permission_category_catalog,
+)
 from plugins.MCPServer.mcp import resources as mcp_resources
 from plugins.MCPServer.mcp.tools_schema import build_tools_schema
 from plugins.MCPServer.core import repository as mcp_repository
@@ -76,18 +88,24 @@ class MCPServer(BasePlugin):
             "allow_manage_plugins": False,
             "plugins_allowed": [],
             "max_list_items": 200,
-            "allow_docs_access": False,
         }
         for key, value in defaults.items():
             if key not in self.config:
                 self.config[key] = value
                 changed = True
-        # Backward compatibility: old per-source docs whitelist -> single on/off flag.
-        if "allow_docs_access" not in self.config:
-            old_sources = self.config.get("docs_allowed_sources")
-            self.config["allow_docs_access"] = bool(
-                isinstance(old_sources, list) and any(str(item).strip() for item in old_sources)
-            )
+        # Migrate legacy documentation access flag to plugin whitelist.
+        if bool(self.config.pop("allow_docs_access", False)):
+            allowed = list(self.config.get("plugins_allowed") or [])
+            if "Docs" not in allowed:
+                allowed.append("Docs")
+                self.config["plugins_allowed"] = allowed
+            changed = True
+        if "allow_docs_access" in self.config:
+            self.config.pop("allow_docs_access", None)
+            changed = True
+        # Backward compatibility: old per-source docs whitelist (no longer used).
+        if "docs_allowed_sources" in self.config:
+            self.config.pop("docs_allowed_sources", None)
             changed = True
         # Backward compatibility: old configs with class management enabled
         # should keep read-only class introspection available after upgrade.
@@ -98,7 +116,69 @@ class MCPServer(BasePlugin):
             self.saveConfig()
 
     def initialization(self):
-        pass
+        self.logger.info(
+            "MCP Server started endpoint=/api/mcp version=%s auth=%s",
+            self.version,
+            "enabled" if bool(self.config.get("auth_token", "").strip()) else "disabled",
+        )
+
+    def route_admin_plugin_tools(self):
+        from app.authentication.handlers import handle_admin_required
+
+        @self.blueprint.route(
+            "/admin/MCPServer/api/plugin-tools/<plugin_name>",
+            methods=["GET"],
+        )
+        @handle_admin_required
+        def admin_plugin_tools(plugin_name: str):
+            self.loadConfig()
+            entry = get_plugin_mcp_tools_catalog_entry(self, plugin_name)
+            if entry is None:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "error": f"Plugin not found or MCP is not supported: {plugin_name}",
+                    }
+                ), 404
+            return jsonify(
+                {
+                    "ok": True,
+                    "entry": entry,
+                    "html": render_template(
+                        "mcp_plugin_tools_body.html",
+                        plugin_entry=entry,
+                    ),
+                }
+            )
+
+    def route_admin_permission_category(self):
+        from app.authentication.handlers import handle_admin_required
+
+        @self.blueprint.route(
+            "/admin/MCPServer/api/permission-category/<config_key>",
+            methods=["GET"],
+        )
+        @handle_admin_required
+        def admin_permission_category(config_key: str):
+            self.loadConfig()
+            category = get_permission_category_catalog(self, config_key)
+            if category is None:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "error": f"Unknown permission category: {config_key}",
+                    }
+                ), 404
+            return jsonify(
+                {
+                    "ok": True,
+                    "category": category,
+                    "html": render_template(
+                        "mcp_permission_category_body.html",
+                        category=category,
+                    ),
+                }
+            )
 
     def admin(self, request):
         if request.method == "GET":
@@ -129,7 +209,6 @@ class MCPServer(BasePlugin):
             ]
             self.config["plugins_allowed"] = selected_plugins
             self.config["max_list_items"] = self._safe_int(request.form.get("max_list_items"), 200, 1, 5000)
-            self.config["allow_docs_access"] = request.form.get("allow_docs_access") == "on"
             self.saveConfig()
 
         endpoint = "/api/mcp"
@@ -150,8 +229,7 @@ class MCPServer(BasePlugin):
             "plugins_allowed": self.config.get("plugins_allowed") or [],
             "mcp_plugin_options": list_mcp_capable_plugins(),
             "max_list_items": int(self.config.get("max_list_items", 200)),
-            "docs_available": self._docs_available(),
-            "allow_docs_access": bool(self.config.get("allow_docs_access", False)),
+            "mcp_default_access": get_permission_category_catalog(self, DEFAULT_ACCESS_CONFIG_KEY),
         }
         return render_template("mcp_admin.html", **content)
 
@@ -173,6 +251,11 @@ class MCPServer(BasePlugin):
                 )
 
             if not self._is_authorized(request):
+                self.logger.warning(
+                    "unauthorized request ip=%s reason=%s",
+                    self._get_client_ip(request),
+                    self._mcp_auth_failure_reason(request),
+                )
                 security_audit_log(
                     "MCP_UNAUTHORIZED",
                     ip=self._get_client_ip(request),
@@ -186,6 +269,10 @@ class MCPServer(BasePlugin):
 
             payload = request.get_json(silent=True)
             if payload is None:
+                self.logger.warning(
+                    "invalid JSON payload ip=%s",
+                    self._get_client_ip(request),
+                )
                 return jsonify({"error": "Invalid JSON payload"}), 400
 
             if isinstance(payload, list):
@@ -209,22 +296,46 @@ class MCPServer(BasePlugin):
         params = req_data.get("params", {})
 
         if not isinstance(req_data, dict) or not method:
+            log_rpc_error(self.logger, str(method or "?"), req_id, -32600, "Invalid Request")
             return self._rpc_error(req_id, -32600, "Invalid Request")
+
+        log_rpc_request(self.logger, str(method), req_id)
 
         try:
             result = self._dispatch_method(method, params)
             if req_id is None:
                 return None
+            summary = self._rpc_result_summary(str(method), result, params)
+            log_rpc_result(self.logger, str(method), req_id, summary=summary)
             return {"jsonrpc": "2.0", "id": req_id, "result": result}
         except ValueError as ex:
+            log_rpc_error(self.logger, str(method), req_id, -32602, str(ex))
             return self._rpc_error(req_id, -32602, str(ex))
         except NotImplementedError as ex:
+            log_rpc_error(self.logger, str(method), req_id, -32601, str(ex))
             return self._rpc_error(req_id, -32601, str(ex))
         except PermissionError as ex:
+            log_rpc_error(self.logger, str(method), req_id, -32001, str(ex))
             return self._rpc_error(req_id, -32001, str(ex))
         except Exception as ex:
-            self.logger.exception(ex, exc_info=True)
+            log_rpc_exception(self.logger, str(method), req_id, ex)
             return self._rpc_error(req_id, -32000, str(ex))
+
+    @staticmethod
+    def _rpc_result_summary(method: str, result: dict, params: Optional[dict] = None) -> Optional[str]:
+        if method == "tools/list" and isinstance(result, dict):
+            tools = result.get("tools") or []
+            return f"tools={len(tools)}"
+        if method == "tools/call":
+            tool_name = str((params or {}).get("name") or "?")
+            return f"tool={tool_name}"
+        if method == "resources/list" and isinstance(result, dict):
+            resources = result.get("resources") or []
+            return f"resources={len(resources)}"
+        if method == "prompts/list" and isinstance(result, dict):
+            prompts = result.get("prompts") or []
+            return f"prompts={len(prompts)}"
+        return None
 
     def _dispatch_method(self, method: str, params: dict) -> dict:
         if method == "initialize":
@@ -238,7 +349,6 @@ class MCPServer(BasePlugin):
         if method == "notifications/initialized":
             return {}
         if method == "tools/list":
-            self.loadConfig()
             return {"tools": self._tools_schema()}
         if method == "tools/call":
             return self._tools_call(params)
@@ -255,18 +365,10 @@ class MCPServer(BasePlugin):
     def _tools_schema(self) -> List[dict]:
         from plugins.MCPServer.mcp.permissions import filter_tool_schemas
 
-        schemas = build_tools_schema(
-            self._property_params_schema(),
-            include_docs_tools=self._docs_available(),
-        )
+        schemas = build_tools_schema(self._property_params_schema())
         return filter_tool_schemas(self, schemas)
 
-    @staticmethod
-    def _docs_available() -> bool:
-        return getModule("Docs") is not None
-
     def _tools_call(self, params: dict) -> dict:
-        self.loadConfig()
         return dispatch_tools_call(self, params)
 
     def _tool_list_objects(self, args: dict) -> dict:
@@ -426,6 +528,14 @@ class MCPServer(BasePlugin):
     @staticmethod
     def _validate_property_params(params: Dict[str, Any]) -> None:
         mcp_utils.validate_property_params(params)
+
+    @staticmethod
+    def _method_params_schema() -> Dict[str, Any]:
+        return mcp_utils.method_params_schema()
+
+    @staticmethod
+    def _validate_method_params(params: Dict[str, Any]) -> None:
+        mcp_utils.validate_method_params(params)
 
     @staticmethod
     def _revision_for_payload(payload: Any) -> str:

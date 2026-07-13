@@ -24,7 +24,7 @@
 | `mcp/handlers/property_runtime.py` | Чтение объектов/свойств, история, `osys_write_property`, `osys_invoke_method`, UI-метаданные |
 | `mcp/handlers/logs.py` | Список и чтение логов с маскированием секретов |
 | `mcp/handlers/source.py` | Read-only доступ к исходникам `app/` и `plugins/` |
-| `mcp/handlers/docs.py` | Поиск и чтение документации через плагин Docs |
+| `mcp/handlers/plugins.py` | Plugin entity MCP tools (включая документацию Docs) |
 | `mcp/handlers/classes_templates.py` | CRUD классов, шаблоны, интроспекция |
 | `mcp/handlers/methods.py` | CRUD кода методов, валидация, dry-run |
 | `mcp/handlers/objects_bulk.py` | Объекты, шаблоны объектов, bulk-операции, удаление |
@@ -52,7 +52,6 @@
 | Чтение | `osys_list_objects`, `osys_get_object`, `osys_get_property` | Не требуется |
 | Логи | `osys_list_logs`, `osys_read_log` | `allow_logs_access` |
 | Исходный код (read-only) | `osys_read_source`, `osys_search_source`, `osys_list_source` | `allow_source_access` |
-| Документация | `osys_search_docs`, `osys_get_doc` | Плагин Docs активен; фильтр `docs_allowed_sources` |
 | Интроспекция классов | `osys_get_class`, `osys_list_classes`, `osys_get_class_tree`, `osys_get_class_full` | `allow_class_introspection` |
 | UI-метаданные свойств | `osys_get_property_ui`, `osys_update_property_ui` | Чтение: не требуется, обновление: `allow_manage_properties` |
 | История | `osys_get_property_history`, `osys_get_property_history_aggregate` | Не требуется |
@@ -128,18 +127,13 @@ Resource `osys://server/capabilities` — тот же payload, что и tool `o
 ## Метаданные `params`
 
 - Инструменты свойств поддерживают `params` (JSON-объект).
-- Типовые ключи из модуля Objects: `icon`, `unit`, `color`, `min`, `max`, `step`, `decimals`, `regexp`, `enum_values` (только для enum), `sort_order`, `read_only`.
+- Типовые ключи свойств из модуля Objects: `icon`, `unit`, `color`, `min`, `max`, `step`, `decimals`, `regexp`, `enum_values` (только для enum), `sort_order`, `read_only`.
+- Инструменты методов поддерживают `params` для **отображения** в списках методов: `icon`, `color`, `sort_order`.
+- В update-инструментах свойств и методов используйте `merge_params` для частичного обновления `params` (по умолчанию `true`).
 
-## Инструменты документации
+## Документация (плагин Docs)
 
-Доступны при установленном и активном плагине Docs. Иначе не попадают в `tools/list`.
-
-| Инструмент | Назначение |
-| :--- | :--- |
-| `osys_search_docs` | Полнотекстовый поиск по индексу (`query`, опционально `source_id`, `locale`, `limit`) |
-| `osys_get_doc` | Чтение одной страницы как plain text (`source_id`, `path`, опционально `max_chars`) |
-
-`docs_allowed_sources` в конфиге ограничивает доступные `source_id`. По умолчанию: `core`, `Docs`, `MCPServer`.
+Поиск и чтение документации доступны через стандартные plugin MCP tools (`osys_plugin_list_entities`, `osys_plugin_get_entity`, коллекция `documents`). Нужны `allow_read_plugins` и `Docs` в `plugins_allowed`. См. `plugins/Docs/docs/mcp.ru.md`.
 
 ## Инструменты доступа к исходникам
 
@@ -199,7 +193,6 @@ Read-only доступ к текстовым файлам в `app/` и `plugins/
 - Запись/управление ограничены флагами `allow_*`.
 - `osys_read_log` маскирует типичные секреты (токены, пароли, API keys, Bearer/Basic auth, JWT, cookies, private keys) перед возвратом содержимого.
 - `allow_source_access` открывает исходный код приложения; включайте только для доверенных сценариев отладки.
-- Инструменты документации учитывают whitelist `docs_allowed_sources`.
 
 ## Отказ от ответственности
 

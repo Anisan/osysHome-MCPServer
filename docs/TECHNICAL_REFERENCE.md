@@ -24,7 +24,7 @@
 | `mcp/handlers/property_runtime.py` | Read objects/properties, history, `osys_write_property`, `osys_invoke_method`, UI metadata |
 | `mcp/handlers/logs.py` | Log listing and reading with secret masking |
 | `mcp/handlers/source.py` | Read-only `app/` and `plugins/` source access |
-| `mcp/handlers/docs.py` | Documentation search/read via Docs plugin |
+| `mcp/handlers/plugins.py` | Plugin entity MCP tools (including Docs documentation) |
 | `mcp/handlers/classes_templates.py` | Class CRUD, class templates, introspection |
 | `mcp/handlers/methods.py` | Method code CRUD, validation, dry-run |
 | `mcp/handlers/objects_bulk.py` | Objects, object templates, bulk updates, deletes |
@@ -53,7 +53,6 @@
 | Read | `osys_list_objects`, `osys_get_object`, `osys_get_property` | None |
 | Logs | `osys_list_logs`, `osys_read_log` | `allow_logs_access` |
 | Source code (read-only) | `osys_read_source`, `osys_search_source`, `osys_list_source` | `allow_source_access` |
-| Documentation | `osys_search_docs`, `osys_get_doc` | Docs plugin active; filtered by `docs_allowed_sources` |
 | Class introspection | `osys_get_class`, `osys_list_classes`, `osys_get_class_tree`, `osys_get_class_full` | `allow_class_introspection` |
 | Property UI metadata | `osys_get_property_ui`, `osys_update_property_ui` | Read: none, update: `allow_manage_properties` |
 | History | `osys_get_property_history`, `osys_get_property_history_aggregate` | None |
@@ -135,18 +134,13 @@ Object template resolution priority is:
 ## Params Metadata
 
 - Property tools support `params` as JSON metadata.
-- Typical keys follow Objects module conventions, for example: `icon`, `unit`, `color`, `min`, `max`, `step`, `decimals`, `regexp`, `enum_values` (enum only), `sort_order`, `read_only`.
+- Typical property keys follow Objects module conventions, for example: `icon`, `unit`, `color`, `min`, `max`, `step`, `decimals`, `regexp`, `enum_values` (enum only), `sort_order`, `read_only`.
+- Method tools support `params` for **display** metadata in object/class method lists: `icon`, `color`, `sort_order`.
+- Use `merge_params` on method/property update tools to patch params partially (default: `true`).
 
-## Documentation Tools
+## Documentation (Docs plugin)
 
-Available when the Docs plugin is installed and active. Tools are omitted from `tools/list` otherwise.
-
-| Tool | Purpose |
-| :--- | :--- |
-| `osys_search_docs` | Full-text search in the documentation index (`query`, optional `source_id`, `locale`, `limit`) |
-| `osys_get_doc` | Read one page as plain text (`source_id`, `path`, optional `max_chars`) |
-
-`docs_allowed_sources` in plugin config restricts which `source_id` values are searchable/readable. Default: `core`, `Docs`, `MCPServer`.
+Documentation search and read are exposed by the **Docs** plugin via standard plugin MCP tools (`osys_plugin_list_entities`, `osys_plugin_get_entity` on collection `documents`). Requires `allow_read_plugins` and `Docs` in `plugins_allowed`. See `plugins/Docs/docs/mcp.ru.md`.
 
 ## Source Access Tools
 
@@ -202,7 +196,6 @@ Use `osys_validate_method_code` before save, and `osys_run_method_dry` for safe 
 - Write/manage actions are guarded by `allow_*` flags.
 - `osys_read_log` applies masking for common secrets (tokens, passwords, API keys, Bearer/Basic auth, JWT, cookies, private keys) before returning content.
 - `allow_source_access` exposes application source code; enable only for trusted debugging scenarios.
-- Documentation tools respect `docs_allowed_sources` whitelist.
 
 ## Disclaimer
 

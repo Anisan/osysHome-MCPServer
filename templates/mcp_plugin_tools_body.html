@@ -1,0 +1,102 @@
+{% if plugin_entry.notes %}
+  <div class="alert alert-light border py-2 px-3 small mb-3" role="alert">
+    <div class="fw-semibold mb-1">Plugin notes</div>
+    {% if plugin_entry.notes is string %}
+      <div class="mb-0">{{ plugin_entry.notes }}</div>
+    {% else %}
+      <ul class="mb-0 ps-3">
+        {% for note in plugin_entry.notes %}
+          <li>{{ note }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="mcp-catalog-section-title">Plugin-level tools</div>
+<div class="mcp-tool-list mb-2">
+  {% for tool in plugin_entry.plugin_tools %}
+    <span
+      class="mcp-tool-name mcp-access-{{ tool.access }}"
+      title="{{ tool.description }}"
+    >{{ tool.name }}</span>
+  {% endfor %}
+</div>
+
+{% if plugin_entry.collections %}
+  <div class="mcp-catalog-section-title">Entity collections</div>
+  {% for collection in plugin_entry.collections %}
+    <div class="mcp-catalog-collection">
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+        <code>{{ collection.id }}</code>
+        {% if collection.title %}
+          <span class="small text-muted">{{ collection.title }}</span>
+        {% endif %}
+        {% if collection.binding_mode and collection.binding_mode != 'none' %}
+          <span class="badge bg-info text-dark">binding: {{ collection.binding_mode }}</span>
+        {% endif %}
+        {% if collection.has_code %}
+          <span class="badge bg-secondary">code</span>
+        {% endif %}
+        {% if collection.writable is defined and not collection.writable %}
+          <span class="badge bg-warning text-dark">read-only</span>
+        {% endif %}
+      </div>
+      {% if collection.description %}
+        <div class="small text-muted mb-1">{{ collection.description }}</div>
+      {% endif %}
+      <div class="mcp-tool-list">
+        {% for tool in plugin_entry.collection_tools if tool.collection == collection.id %}
+          <span
+            class="mcp-tool-name mcp-access-{{ tool.access }}"
+            title="{{ tool.description }}"
+          >{{ tool.name }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% if plugin_entry.operations %}
+  <div class="mcp-catalog-section-title">
+    Plugin operations (<code>osys_plugin_invoke</code>)
+  </div>
+  {% for operation in plugin_entry.operations %}
+    <div class="mcp-catalog-op">
+      <code>{{ operation.name }}</code>
+      {% if operation.description %}
+        <span class="text-muted small ms-1">{{ operation.description }}</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% if plugin_entry.extra_tools %}
+  <div class="mcp-catalog-section-title">Declarative surface</div>
+  <div class="mcp-tool-list mb-2">
+    {% for tool in plugin_entry.extra_tools %}
+      <span
+        class="mcp-tool-name"
+        title="{{ tool.description or tool.kind }}"
+      >{{ tool.id or tool.title or tool.kind }}</span>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if plugin_entry.descriptors.resources %}
+  <div class="mcp-catalog-section-title">Resources</div>
+  <div class="mcp-tool-list mb-2">
+    {% for resource in plugin_entry.descriptors.resources %}
+      <span class="mcp-tool-name" title="{{ resource.kind }}">{{ resource.uri }}</span>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if plugin_entry.descriptors.prompts %}
+  <div class="mcp-catalog-section-title">Prompts</div>
+  <div class="mcp-tool-list">
+    {% for prompt in plugin_entry.descriptors.prompts %}
+      <span class="mcp-tool-name" title="{{ prompt.description }}">{{ prompt.name }}</span>
+    {% endfor %}
+  </div>
+{% endif %}

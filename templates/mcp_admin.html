@@ -1,5 +1,29 @@
 {% extends "layouts/module_admin.html" %}
 
+{% macro mcp_perm_tools_btn(config_key) %}
+  <button
+    type="button"
+    class="btn btn-outline-secondary btn-sm mcp-perm-tools-btn mcp-open-permission-tools"
+    data-mcp-permission="{{ config_key }}"
+    title="View MCP tools"
+    aria-label="View MCP tools for {{ config_key }}"
+  >
+    <i class="fas fa-list"></i>
+  </button>
+{% endmacro %}
+
+{% macro mcp_plugin_tools_btn(plugin_name) %}
+  <button
+    type="button"
+    class="btn btn-outline-secondary btn-sm mcp-perm-tools-btn mcp-open-plugin-tools"
+    data-mcp-plugin="{{ plugin_name }}"
+    title="View MCP tools"
+    aria-label="View MCP tools for {{ plugin_name }}"
+  >
+    <i class="fas fa-list"></i>
+  </button>
+{% endmacro %}
+
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="/admin/MCPServer">MCP Server</a></li>
 {% endblock %}
@@ -64,6 +88,16 @@
     cursor: pointer;
     width: 100%;
   }
+  .mcp-perm-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  .mcp-perm-tools-btn {
+    padding: 0.18rem 0.45rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
   .mcp-tool-list {
     margin-top: 0.3rem;
     display: flex;
@@ -81,12 +115,41 @@
     font-family: var(--bs-font-monospace);
   }
   .mcp-plugin-list {
-    max-height: 400px;
-    overflow-y: auto;
-    border: 1px solid var(--bs-border-color);
-    border-radius: 0.4rem;
-    padding: 0.55rem;
-    background: var(--bs-tertiary-bg, var(--bs-body-bg));
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    padding: 0;
+    background: transparent;
+  }
+  .mcp-plugin-whitelist-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    cursor: pointer;
+  }
+  .mcp-plugin-whitelist-card .form-check-label {
+    width: 100%;
+    cursor: pointer;
+  }
+  .mcp-plugin-whitelist-card .mcp-open-plugin-tools {
+    cursor: pointer;
+  }
+  .mcp-plugin-icon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  .mcp-plugin-whitelist-head .form-check-input {
+    margin-top: 0.55rem;
+  }
+  .mcp-plugin-collection-badges {
+    margin-top: 0;
   }
   .mcp-filter-hidden {
     display: none !important;
@@ -177,6 +240,64 @@
     .mcp-save-bar .btn {
       width: 100%;
     }
+  }
+  .mcp-plugin-modal .modal-body {
+    max-height: min(70vh, 720px);
+    overflow-y: auto;
+  }
+  .mcp-modal-title-icon {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .mcp-modal-title-icon img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+  }
+  .mcp-catalog-section-title {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+    margin: 0.55rem 0 0.25rem;
+  }
+  .mcp-catalog-section-title:first-child {
+    margin-top: 0;
+  }
+  .mcp-catalog-collection {
+    border: 1px dashed var(--bs-border-color);
+    border-radius: 0.35rem;
+    padding: 0.45rem 0.55rem;
+    margin-top: 0.35rem;
+    background: var(--bs-tertiary-bg, var(--bs-body-bg));
+  }
+  .mcp-catalog-op {
+    font-size: 0.78rem;
+    padding: 0.15rem 0;
+    border-bottom: 1px solid var(--bs-border-color-translucent, var(--bs-border-color));
+  }
+  .mcp-catalog-op:last-child {
+    border-bottom: 0;
+  }
+  .mcp-access-read {
+    background: rgba(var(--bs-success-rgb), 0.12);
+    color: var(--bs-success);
+    border-color: rgba(var(--bs-success-rgb), 0.25);
+  }
+  .mcp-access-write {
+    background: rgba(var(--bs-warning-rgb), 0.15);
+    color: var(--bs-warning-text-emphasis, #664d03);
+    border-color: rgba(var(--bs-warning-rgb), 0.3);
   }
 </style>
 
@@ -323,6 +444,34 @@
 
     <div class="row g-2 mb-2">
       <div class="col-12 col-xxl-6">
+        {% if mcp_default_access %}
+        <div class="card shadow-sm mb-2 mcp-section" id="mcpSecDefault">
+          <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
+            <h6 class="mb-0"><i class="fas fa-unlock me-2 text-success"></i>Default access</h6>
+            <span class="badge bg-success">{{ mcp_default_access.tool_count }} tools</span>
+          </div>
+          <div class="card-body mcp-section-body">
+            <div class="mcp-perm-item" data-search="default access always on read objects properties server health">
+              <div class="mcp-perm-card" id="perm_default_access">
+                <div class="mcp-perm-card-head">
+                  <div class="flex-grow-1 mb-0">
+                    <span class="fw-semibold">{{ mcp_default_access.title }}</span>
+                    <span class="badge bg-success ms-1">Always on</span>
+                    <div class="small text-muted mt-1">{{ mcp_default_access.description }}</div>
+                    <div class="mcp-tool-list">
+                      {% for tool in mcp_default_access.tools %}
+                        <span class="mcp-tool-name">{{ tool.name }}</span>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  {{ mcp_perm_tools_btn('default_access') }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
         <div class="card shadow-sm mb-2 mcp-section" id="mcpSecOperational">
           <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
             <h6 class="mb-0"><i class="fas fa-cogs me-2 text-primary"></i>Operational permissions</h6>
@@ -332,7 +481,8 @@
             <div class="row g-2">
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="write properties osys_write_property medium">
                 <div class="mcp-perm-card h-100" id="perm_allow_write_tools">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_write_tools"
                            name="allow_write_tools" data-section="operational" data-label="Write properties"
                            {% if allow_write_tools %}checked{% endif %}>
@@ -345,11 +495,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_write_tools') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="invoke methods osys_invoke_method medium">
                 <div class="mcp-perm-card h-100" id="perm_allow_method_calls">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_method_calls"
                            name="allow_method_calls" data-section="operational" data-label="Invoke methods"
                            {% if allow_method_calls %}checked{% endif %}>
@@ -362,11 +515,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_method_calls') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="logs access osys_list_logs osys_read_log high sensitive">
                 <div class="mcp-perm-card h-100" id="perm_allow_logs_access">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_logs_access"
                            name="allow_logs_access" data-section="operational" data-label="Logs access"
                            {% if allow_logs_access %}checked{% endif %}>
@@ -380,11 +536,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_logs_access') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="source code read osys_read_source osys_search_source osys_list_source medium">
                 <div class="mcp-perm-card h-100" id="perm_allow_source_access">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_source_access"
                            name="allow_source_access" value="on" data-section="operational" data-label="Source code"
                            {% if allow_source_access %}checked{% endif %}>
@@ -399,6 +558,8 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_source_access') }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -406,7 +567,7 @@
           <div class="card-body py-2 mcp-section-empty text-muted small">No matching permissions in this section.</div>
         </div>
 
-        <div class="card shadow-sm mb-0 mcp-section" id="mcpSecAdvanced">
+        <div class="card shadow-sm mb-2 mcp-section" id="mcpSecAdvanced">
           <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
             <h6 class="mb-0"><i class="fas fa-database me-2 text-primary"></i>Advanced management</h6>
             <span class="badge bg-secondary mcp-section-count" data-section="advanced">0</span>
@@ -418,7 +579,8 @@
             <div class="row g-2">
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="class introspection osys_get_class osys_list_classes osys_get_class_full low">
                 <div class="mcp-perm-card h-100" id="perm_allow_class_introspection">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_class_introspection"
                            name="allow_class_introspection" data-section="advanced" data-label="Class introspection"
                            {% if allow_class_introspection %}checked{% endif %}>
@@ -433,11 +595,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_class_introspection') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="class management osys_add_class osys_update_class osys_delete_class critical">
                 <div class="mcp-perm-card h-100" id="perm_allow_manage_classes">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_manage_classes"
                            name="allow_manage_classes" data-section="advanced" data-label="Class management"
                            {% if allow_manage_classes %}checked{% endif %}>
@@ -452,11 +617,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_manage_classes') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="object management osys_add_object osys_update_object osys_delete_object critical">
                 <div class="mcp-perm-card h-100" id="perm_allow_manage_objects">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_manage_objects"
                            name="allow_manage_objects" data-section="advanced" data-label="Object management"
                            {% if allow_manage_objects %}checked{% endif %}>
@@ -471,11 +639,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_manage_objects') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 col-lg-6 mcp-perm-item" data-search="property management osys_add_class_property osys_add_object_property osys_delete_class_property osys_delete_object_property critical">
                 <div class="mcp-perm-card h-100" id="perm_allow_manage_properties">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_manage_properties"
                            name="allow_manage_properties" data-section="advanced" data-label="Property management"
                            {% if allow_manage_properties %}checked{% endif %}>
@@ -491,11 +662,14 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_manage_properties') }}
+                  </div>
                 </div>
               </div>
               <div class="col-12 mcp-perm-item" data-search="method management osys_add_class_method osys_delete_class_method osys_add_object_method osys_validate_method_code osys_run_method_dry critical">
                 <div class="mcp-perm-card" id="perm_allow_manage_methods">
-                  <div class="form-check">
+                  <div class="mcp-perm-card-head">
+                  <div class="form-check flex-grow-1 mb-0">
                     <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_manage_methods"
                            name="allow_manage_methods" data-section="advanced" data-label="Method management"
                            {% if allow_manage_methods %}checked{% endif %}>
@@ -512,6 +686,8 @@
                       </div>
                     </label>
                   </div>
+                  {{ mcp_perm_tools_btn('allow_manage_methods') }}
+                  </div>
                 </div>
               </div>
             </div>
@@ -522,7 +698,6 @@
 
       <div class="col-12 col-xxl-6">
         <div class="card shadow-sm mb-0 mcp-section" id="mcpSecPlugins">
-    <div class="card border-0 shadow-sm mb-0 mcp-section" id="mcpSecPlugins">
       <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
         <h6 class="mb-0"><i class="fas fa-puzzle-piece me-2 text-primary"></i>Plugin management</h6>
         <span class="badge bg-secondary mcp-section-count" data-section="plugins">0</span>
@@ -531,7 +706,8 @@
         <div class="row g-2 mb-2">
           <div class="col-12 col-lg-6 mcp-perm-item" data-search="plugin read tools osys_list_plugins osys_get_plugin_config low">
             <div class="mcp-perm-card h-100" id="perm_allow_read_plugins">
-              <div class="form-check">
+              <div class="mcp-perm-card-head">
+              <div class="form-check flex-grow-1 mb-0">
                 <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_read_plugins"
                        name="allow_read_plugins" data-section="plugins" data-label="Plugin read"
                        {% if allow_read_plugins %}checked{% endif %}>
@@ -541,11 +717,14 @@
                   <div class="small text-muted mt-1">List plugins, read config, list entities.</div>
                 </label>
               </div>
+              {{ mcp_perm_tools_btn('allow_read_plugins') }}
+              </div>
             </div>
           </div>
           <div class="col-12 col-lg-6 mcp-perm-item" data-search="plugin write tools osys_update_plugin_config osys_plugin_invoke high">
             <div class="mcp-perm-card h-100" id="perm_allow_manage_plugins">
-              <div class="form-check">
+              <div class="mcp-perm-card-head">
+              <div class="form-check flex-grow-1 mb-0">
                 <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_manage_plugins"
                        name="allow_manage_plugins" data-section="plugins" data-label="Plugin write"
                        {% if allow_manage_plugins %}checked{% endif %}>
@@ -554,6 +733,8 @@
                   <span class="badge bg-danger ms-1">High</span>
                   <div class="small text-muted mt-1">Update config, manage entities, invoke plugin actions.</div>
                 </label>
+              </div>
+              {{ mcp_perm_tools_btn('allow_manage_plugins') }}
               </div>
             </div>
           </div>
@@ -573,26 +754,48 @@
           <div class="mcp-plugin-list" id="mcpPluginList">
             <div class="row g-2">
               {% for plugin_option in mcp_plugin_options %}
-                <div class="col-12 col-md-6 col-lg-4 mcp-plugin-item mcp-perm-item"
+                <div class="col-12 col-md-6 col-xl-4 mcp-plugin-item mcp-perm-item"
                      data-search="{{ plugin_option.name | lower }} {{ (plugin_option.title or '') | lower }} plugin whitelist {{ plugin_option.collections | join(' ') | lower }}">
-                  <div class="form-check">
-                    <input
-                      class="form-check-input mcp-plugin-checkbox"
-                      type="checkbox"
-                      id="plugins_allowed_{{ loop.index }}"
-                      name="plugins_allowed_selected"
-                      value="{{ plugin_option.name }}"
-                      data-label="{{ plugin_option.name }}"
-                      {% if plugin_option.name in plugins_allowed %}checked{% endif %}
-                    >
-                    <label class="form-check-label" for="plugins_allowed_{{ loop.index }}">
-                      <code>{{ plugin_option.name }}</code>
-                      {% if plugin_option.collections %}
-                        <span class="text-muted small d-block">
-                          {{ plugin_option.collections | join(', ') }}
-                        </span>
-                      {% endif %}
-                    </label>
+                  <div class="mcp-perm-card h-100 mcp-plugin-whitelist-card">
+                    <div class="mcp-perm-card-head mcp-plugin-whitelist-head">
+                      <div class="form-check flex-grow-1 mb-0">
+                        <input
+                          class="form-check-input mcp-plugin-checkbox"
+                          type="checkbox"
+                          id="plugins_allowed_{{ loop.index }}"
+                          name="plugins_allowed_selected"
+                          value="{{ plugin_option.name }}"
+                          data-label="{{ plugin_option.name }}"
+                          {% if plugin_option.name in plugins_allowed %}checked{% endif %}
+                        >
+                        <label class="form-check-label w-100" for="plugins_allowed_{{ loop.index }}">
+                          <span class="d-flex align-items-center gap-2">
+                            <img
+                              class="mcp-plugin-icon"
+                              src="/{{ plugin_option.name }}/static/{{ plugin_option.name }}.png"
+                              alt=""
+                              loading="lazy"
+                              onerror="this.onerror=null;this.src='{{ config.ASSETS_ROOT }}/images/module.png';"
+                            >
+                            <span>
+                              <span class="fw-semibold"><code>{{ plugin_option.name }}</code></span>
+                              {% if not plugin_option.active %}
+                                <span class="badge bg-secondary ms-1">inactive</span>
+                              {% endif %}
+                            </span>
+                          </span>
+                          {% if plugin_option.collections %}
+                            <div class="mcp-tool-list mcp-plugin-collection-badges mt-1">
+                              <span class="small text-muted">Collections:</span>
+                              {% for collection_id in plugin_option.collections %}
+                                <span class="mcp-tool-name">{{ collection_id }}</span>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                        </label>
+                      </div>
+                      {{ mcp_plugin_tools_btn(plugin_option.name) }}
+                    </div>
                   </div>
                 </div>
               {% endfor %}
@@ -600,6 +803,7 @@
           </div>
           <div class="form-text mt-2">
             Only checked plugins are available via plugin atomic tools. None are enabled by default.
+            Use the list button to view MCP tools for each plugin.
           </div>
         {% else %}
           <div class="alert alert-warning py-2 px-3 mb-0" role="alert">
@@ -608,49 +812,6 @@
         {% endif %}
       </div>
       <div class="card-body py-2 mcp-section-empty text-muted small">No matching items in this section.</div>
-    </div>
-      </div>
-
-    <div class="col-12">
-    <div class="card shadow-sm mb-0 mcp-section mt-2" id="mcpSecDocs">
-      <div class="card-header bg-transparent d-flex align-items-center justify-content-between">
-        <h6 class="mb-0"><i class="fas fa-book me-2 text-primary"></i>Documentation tools</h6>
-        <span class="badge bg-secondary mcp-section-count" data-section="docs">0</span>
-      </div>
-      <div class="card-body mcp-section-body">
-        {% if docs_available %}
-          <div class="alert alert-success py-2 px-3 mb-2 small" role="alert">
-            <i class="fas fa-check-circle me-1"></i>Docs plugin detected — documentation tools can be enabled below.
-          </div>
-        {% else %}
-          <div class="alert alert-warning py-2 px-3 mb-2 small" role="alert">
-            Docs plugin is not installed or active. Enable the Docs plugin first.
-          </div>
-        {% endif %}
-
-        <div class="mcp-perm-item" data-search="documentation docs osys_search_docs osys_get_doc read low">
-          <div class="mcp-perm-card" id="perm_allow_docs_access">
-            <div class="form-check">
-              <input class="form-check-input mcp-perm-checkbox" type="checkbox" id="allow_docs_access"
-                     name="allow_docs_access" data-section="docs" data-label="Documentation"
-                     {% if allow_docs_access %}checked{% endif %}
-                     {% if not docs_available %}disabled{% endif %}>
-              <label class="form-check-label" for="allow_docs_access">
-                <span class="fw-semibold">Allow documentation read access</span>
-                <span class="badge bg-success ms-1">Low</span>
-                <div class="small text-muted mt-1">
-                  Search and read all indexed documentation (all modules). Read-only.
-                </div>
-                <div class="mcp-tool-list">
-                  <span class="mcp-tool-name">osys_search_docs</span>
-                  <span class="mcp-tool-name">osys_get_doc</span>
-                </div>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="card-body py-2 mcp-section-empty text-muted small">No matching permissions in this section.</div>
     </div>
       </div>
     </div>
@@ -664,6 +825,39 @@
       </button>
     </div>
   </form>
+
+  <div
+    class="modal fade mcp-plugin-modal"
+    id="mcpPluginToolsModal"
+    tabindex="-1"
+    aria-labelledby="mcpPluginToolsModalLabel"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title mb-0 d-flex align-items-center gap-2" id="mcpPluginToolsModalLabel">
+              <span class="mcp-modal-title-icon" id="mcpPluginToolsModalIcon" aria-hidden="true">
+                <i class="fas fa-list text-primary"></i>
+              </span>
+              <span id="mcpPluginToolsModalName"></span>
+            </h5>
+            <div class="small text-muted mt-1" id="mcpPluginToolsModalMeta"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="mcpPluginToolsModalBody">
+          <div class="text-center text-muted py-4">
+            <i class="fas fa-spinner fa-spin me-1"></i>Loading MCP tools...
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -700,8 +894,7 @@
       allow_manage_properties: false,
       allow_manage_methods: false,
       allow_read_plugins: true,
-      allow_manage_plugins: false,
-      allow_docs_access: false
+      allow_manage_plugins: false
     },
     standard: {
       allow_write_tools: true,
@@ -714,8 +907,7 @@
       allow_manage_properties: false,
       allow_manage_methods: false,
       allow_read_plugins: true,
-      allow_manage_plugins: false,
-      allow_docs_access: true
+      allow_manage_plugins: false
     },
     full: {
       allow_write_tools: true,
@@ -728,8 +920,7 @@
       allow_manage_properties: true,
       allow_manage_methods: true,
       allow_read_plugins: true,
-      allow_manage_plugins: true,
-      allow_docs_access: true
+      allow_manage_plugins: true
     }
   };
 
@@ -950,6 +1141,20 @@
     cb.addEventListener('change', updatePluginCount);
   });
 
+  document.querySelectorAll('.mcp-plugin-whitelist-card').forEach(function (card) {
+    card.addEventListener('click', function (event) {
+      if (event.target.closest('button, a, input, label')) {
+        return;
+      }
+      var checkbox = card.querySelector('.mcp-plugin-checkbox');
+      if (!checkbox) {
+        return;
+      }
+      checkbox.checked = !checkbox.checked;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
   var selectAllBtn = document.getElementById('mcpPluginsSelectAll');
   var selectNoneBtn = document.getElementById('mcpPluginsSelectNone');
   if (selectAllBtn) {
@@ -962,6 +1167,239 @@
   initSectionNav();
   updatePermStats();
   updatePluginCount();
+
+  var toolsModalEl = document.getElementById('mcpPluginToolsModal');
+  var toolsModalBody = document.getElementById('mcpPluginToolsModalBody');
+  var toolsModalIcon = document.getElementById('mcpPluginToolsModalIcon');
+  var toolsModalName = document.getElementById('mcpPluginToolsModalName');
+  var toolsModalMeta = document.getElementById('mcpPluginToolsModalMeta');
+  var toolsModalAssetsRoot = '{{ config.ASSETS_ROOT }}';
+  var toolsModalInstance = null;
+  var toolsModalCache = {};
+  var toolsModalRequest = null;
+  var toolsModalActiveKey = '';
+
+  function getToolsModal() {
+    if (!toolsModalEl || !window.bootstrap || !window.bootstrap.Modal) {
+      return null;
+    }
+    if (!toolsModalInstance) {
+      toolsModalInstance = window.bootstrap.Modal.getOrCreateInstance(toolsModalEl);
+    }
+    return toolsModalInstance;
+  }
+
+  function setToolsModalLoading() {
+    if (!toolsModalBody) {
+      return;
+    }
+    toolsModalBody.innerHTML = (
+      '<div class="text-center text-muted py-4">' +
+      '<i class="fas fa-spinner fa-spin me-1"></i>Loading MCP tools...' +
+      '</div>'
+    );
+  }
+
+  function setToolsModalError(message) {
+    if (!toolsModalBody) {
+      return;
+    }
+    toolsModalBody.innerHTML = (
+      '<div class="alert alert-danger py-2 px-3 mb-0" role="alert">' +
+      message +
+      '</div>'
+    );
+  }
+
+  function setToolsModalIcon(kind, id) {
+    if (!toolsModalIcon) {
+      return;
+    }
+    if (kind === 'plugin') {
+      var pluginName = String(id || '').trim();
+      if (!pluginName) {
+        toolsModalIcon.innerHTML = '<i class="fas fa-plug text-primary"></i>';
+        return;
+      }
+      toolsModalIcon.innerHTML = (
+        '<img src="/' + encodeURIComponent(pluginName) + '/static/' +
+        encodeURIComponent(pluginName) + '.png" alt="" loading="lazy" ' +
+        'onerror="this.onerror=null;this.src=\'' + toolsModalAssetsRoot + '/images/module.png\';">'
+      );
+      return;
+    }
+
+    var iconClass = 'fa-list';
+    if (id === 'default_access') {
+      iconClass = 'fa-unlock';
+    } else if (id === 'allow_read_plugins' || id === 'allow_manage_plugins') {
+      iconClass = 'fa-plug';
+    } else if (
+      id === 'allow_manage_classes' ||
+      id === 'allow_manage_objects' ||
+      id === 'allow_manage_properties' ||
+      id === 'allow_manage_methods' ||
+      id === 'allow_class_introspection'
+    ) {
+      iconClass = 'fa-database';
+    } else if (id === 'allow_logs_access' || id === 'allow_source_access') {
+      iconClass = 'fa-file-alt';
+    } else if (id === 'allow_write_tools' || id === 'allow_method_calls') {
+      iconClass = 'fa-cogs';
+    }
+    toolsModalIcon.innerHTML = '<i class="fas ' + iconClass + ' text-primary"></i>';
+  }
+
+  function updateToolsModalHeaderPlugin(entry) {
+    setToolsModalIcon('plugin', entry.name || '');
+    if (toolsModalName) {
+      toolsModalName.innerHTML = '<code>' + (entry.name || '') + '</code>';
+    }
+    if (toolsModalMeta) {
+      toolsModalMeta.textContent = (
+        String(entry.tool_count || 0) + ' MCP tools · ' +
+        (entry.allowed ? 'whitelisted' : 'not whitelisted')
+      );
+    }
+  }
+
+  function updateToolsModalHeaderCategory(category) {
+    setToolsModalIcon('permission', category.id || '');
+    if (toolsModalName) {
+      toolsModalName.textContent = category.title || category.id || '';
+    }
+    if (toolsModalMeta) {
+      if (category.always_on) {
+        toolsModalMeta.textContent = (
+          String(category.tool_count || 0) + ' MCP tools · always available'
+        );
+      } else {
+        toolsModalMeta.textContent = (
+          String(category.tool_count || 0) + ' MCP tools · ' +
+          (category.enabled ? 'permission enabled' : 'permission disabled')
+        );
+      }
+    }
+  }
+
+  function loadToolsModal(kind, id) {
+    if (!id || !toolsModalBody) {
+      return;
+    }
+    var cacheKey = kind + ':' + id;
+    toolsModalActiveKey = cacheKey;
+
+    if (kind === 'plugin') {
+      setToolsModalIcon('plugin', id);
+      if (toolsModalName) {
+        toolsModalName.innerHTML = '<code>' + id + '</code>';
+      }
+    } else {
+      setToolsModalIcon('permission', id);
+      if (toolsModalName) {
+        toolsModalName.textContent = id;
+      }
+    }
+    if (toolsModalMeta) {
+      toolsModalMeta.textContent = 'Loading MCP tools...';
+    }
+
+    if (toolsModalCache[cacheKey]) {
+      var cached = toolsModalCache[cacheKey];
+      if (kind === 'plugin') {
+        updateToolsModalHeaderPlugin(cached.entry);
+      } else {
+        updateToolsModalHeaderCategory(cached.entry);
+      }
+      toolsModalBody.innerHTML = cached.html;
+      return;
+    }
+
+    setToolsModalLoading();
+    if (toolsModalRequest && typeof toolsModalRequest.abort === 'function') {
+      toolsModalRequest.abort();
+    }
+
+    var url = kind === 'plugin'
+      ? '/admin/MCPServer/api/plugin-tools/' + encodeURIComponent(id)
+      : '/admin/MCPServer/api/permission-category/' + encodeURIComponent(id);
+
+    toolsModalRequest = new AbortController();
+    fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: toolsModalRequest.signal,
+    })
+      .then(function (response) {
+        return response.json().then(function (payload) {
+          return { ok: response.ok, payload: payload };
+        });
+      })
+      .then(function (result) {
+        if (cacheKey !== toolsModalActiveKey) {
+          return;
+        }
+        if (!result.ok || !result.payload || !result.payload.ok) {
+          var errorText = (result.payload && result.payload.error) || 'Failed to load MCP tools';
+          setToolsModalError(errorText);
+          if (toolsModalMeta) {
+            toolsModalMeta.textContent = 'Load failed';
+          }
+          return;
+        }
+        var entry = result.payload.entry || result.payload.category;
+        toolsModalCache[cacheKey] = {
+          entry: entry,
+          html: result.payload.html,
+        };
+        if (kind === 'plugin') {
+          updateToolsModalHeaderPlugin(entry);
+        } else {
+          updateToolsModalHeaderCategory(entry);
+        }
+        toolsModalBody.innerHTML = result.payload.html;
+      })
+      .catch(function (error) {
+        if (error && error.name === 'AbortError') {
+          return;
+        }
+        if (cacheKey !== toolsModalActiveKey) {
+          return;
+        }
+        setToolsModalError('Failed to load MCP tools');
+        if (toolsModalMeta) {
+          toolsModalMeta.textContent = 'Load failed';
+        }
+      })
+      .finally(function () {
+        toolsModalRequest = null;
+      });
+  }
+
+  function openToolsModal(kind, id) {
+    var modal = getToolsModal();
+    if (!modal) {
+      return;
+    }
+    loadToolsModal(kind, id);
+    modal.show();
+  }
+
+  document.querySelectorAll('.mcp-open-plugin-tools').forEach(function (btn) {
+    btn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openToolsModal('plugin', btn.getAttribute('data-mcp-plugin') || '');
+    });
+  });
+
+  document.querySelectorAll('.mcp-open-permission-tools').forEach(function (btn) {
+    btn.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openToolsModal('permission', btn.getAttribute('data-mcp-permission') || '');
+    });
+  });
 })();
 </script>
 {% endblock %}

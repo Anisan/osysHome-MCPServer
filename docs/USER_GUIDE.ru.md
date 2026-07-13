@@ -53,7 +53,6 @@ MCPServer открывает endpoint `/api/mcp` для MCP JSON-RPC:
 | `allow_manage_properties` | Свойства + UI-метаданные |
 | `allow_manage_methods` | Методы + bulk-обновления |
 | `max_list_items` | Ограничение объема выдачи |
-| `docs_allowed_sources` | Whitelist `source_id` для `osys_search_docs` / `osys_get_doc` (нужен плагин Docs) |
 
 ## Авторизация
 
@@ -83,10 +82,12 @@ MCPServer открывает endpoint `/api/mcp` для MCP JSON-RPC:
 
 ### Документация (плагин Docs)
 
-- `osys_search_docs` — поиск по запросу, опционально `source_id` и `locale`
-- `osys_get_doc` — чтение одной страницы как plain text (`source_id` + `path`)
+Через plugin MCP tools с `plugin: "Docs"`, коллекция `documents`:
 
-Ограничивайте источники в админке через `docs_allowed_sources`, если не хотите отдавать MCP-клиенту всю документацию плагинов.
+- `osys_plugin_list_entities` — поиск (`query`) или обзор (`source_id`), опционально `locale` и `limit`
+- `osys_plugin_get_entity` — чтение страницы (`entity_id`: `{source_id}/{path}`)
+
+Нужны `allow_read_plugins` и `Docs` в `plugins_allowed`. См. `plugins/Docs/docs/mcp.ru.md`.
 
 ### Логи (нужно разрешение)
 
@@ -190,6 +191,6 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] `osys_get_property_ui`/`osys_update_property_ui` работают
 - [ ] `revision` + `if_match` работают в update
 - [ ] В security audit фиксируются неуспешные попытки входа
-- [ ] `osys_search_docs` / `osys_get_doc` учитывают `docs_allowed_sources`
+- [ ] Документация Docs через `osys_plugin_list_entities` / `osys_plugin_get_entity` (Docs в `plugins_allowed`)
 - [ ] Source tools выключены, если не нужны явно
 - [ ] `tools/list` соответствует правам токена; полный каталог — `osys_server_capabilities`

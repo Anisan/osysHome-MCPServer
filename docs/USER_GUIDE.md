@@ -53,7 +53,6 @@ MCPServer exposes `/api/mcp` for MCP JSON-RPC calls:
 | `allow_manage_properties` | Property + UI metadata tools |
 | `allow_manage_methods` | Method code + bulk method updates |
 | `max_list_items` | Limits list/read volumes |
-| `docs_allowed_sources` | Whitelist of documentation `source_id` values for `osys_search_docs` / `osys_get_doc` (requires Docs plugin) |
 
 ## Authentication
 
@@ -83,10 +82,12 @@ Failed auth attempts are recorded in security audit logs (`MCP_UNAUTHORIZED`).
 
 ### Documentation (Docs plugin)
 
-- `osys_search_docs` — search by query, optional `source_id` and `locale`
-- `osys_get_doc` — read one page as plain text (`source_id` + `path`)
+Use plugin MCP tools with `plugin: "Docs"`, collection `documents`:
 
-Restrict sources in admin via `docs_allowed_sources` if you do not want MCP clients to read all plugin docs.
+- `osys_plugin_list_entities` — search (`query`) or browse (`source_id`), optional `locale` and `limit`
+- `osys_plugin_get_entity` — read one page as plain text (`entity_id`: `{source_id}/{path}`)
+
+Requires `allow_read_plugins` and `Docs` in `plugins_allowed`. See `plugins/Docs/docs/mcp.ru.md`.
 
 ### Logs (permission required)
 
@@ -190,6 +191,6 @@ Invoke-RestMethod -Method Post -Uri $url -Headers $headers -ContentType "applica
 - [ ] `osys_get_property_ui`/`osys_update_property_ui` work
 - [ ] `revision` + `if_match` works on updates
 - [ ] Security audit logs record failed auth attempts
-- [ ] `osys_search_docs` / `osys_get_doc` respect `docs_allowed_sources`
+- [ ] Docs documentation via `osys_plugin_list_entities` / `osys_plugin_get_entity` (Docs in `plugins_allowed`)
 - [ ] Source tools are disabled unless explicitly needed
 - [ ] `tools/list` count matches token permissions; full catalog via `osys_server_capabilities`

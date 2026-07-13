@@ -45,8 +45,6 @@ def _permissions_payload(plugin) -> dict:
         "allow_manage_plugins": bool(plugin.config.get("allow_manage_plugins", False)),
         "plugins_allowed": list(plugin.config.get("plugins_allowed") or []),
         "max_list_items": int(plugin.config.get("max_list_items", 200)),
-        "allow_docs_access": bool(plugin.config.get("allow_docs_access", False)),
-        "docs_available": bool(plugin._docs_available()),
     }
 
 
@@ -103,10 +101,7 @@ def build_server_capabilities(plugin) -> Dict[str, Any]:
     """Build server capabilities document for tool and resource consumers."""
     from plugins.MCPServer.mcp.tools_schema import build_tools_schema
 
-    schema = build_tools_schema(
-        plugin._property_params_schema(),
-        include_docs_tools=plugin._docs_available(),
-    )
+    schema = build_tools_schema(plugin._property_params_schema())
     tool_names = {item["name"] for item in schema}
     available_schema = filter_tool_schemas(plugin, schema)
     available_names = {item["name"] for item in available_schema}
@@ -188,7 +183,6 @@ def handle_meta_tools(plugin, tool_name: str, args: dict):
                 "objects_loaded": len(objects_storage.objects),
                 "plugins_active": len(__import__("app.core.main.PluginsHelper", fromlist=["plugins"]).plugins),
                 "mcp_whitelist_count": len(plugin.config.get("plugins_allowed") or []),
-                "docs_available": bool(plugin._docs_available()),
                 "version": str(plugin.version),
                 "telemetry": telemetry_summary(limit=5),
             }
