@@ -110,6 +110,8 @@ def build_server_capabilities(plugin) -> Dict[str, Any]:
         group["tools_present"] = [name for name in group["tools"] if name in tool_names]
         group["tools_available"] = [name for name in group["tools"] if name in available_names]
 
+    from plugins.MCPServer.mcp.agent_guidelines import AGENT_GUIDELINES_URI
+
     return {
         "protocol_version": plugin._PROTOCOL_VERSION,
         "server_name": "osysHome MCP Server",
@@ -126,6 +128,11 @@ def build_server_capabilities(plugin) -> Dict[str, Any]:
         "plugin_tools": _plugin_tools_payload(plugin),
         "telemetry": telemetry_summary(limit=10),
         "mcp_capable_plugins": _mcp_plugins_payload(plugin),
+        "agent_guidance": {
+            "uri": AGENT_GUIDELINES_URI,
+            "via": ["initialize.instructions", "resources/read"],
+            "summary": "Working rules for MCP agents (capabilities first, validate/dry-run, plugins_allowed)",
+        },
         "resources": {
             "static": [item["uri"] for item in mcp_resources.STATIC_RESOURCE_DEFINITIONS],
             "dynamic": [

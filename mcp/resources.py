@@ -56,6 +56,12 @@ STATIC_RESOURCE_DEFINITIONS = [
         "mimeType": "application/json",
     },
     {
+        "uri": "osys://server/agent-guidelines",
+        "name": "server-agent-guidelines",
+        "description": "Working rules for MCP agents using osysHome MCPServer",
+        "mimeType": "text/markdown",
+    },
+    {
         "uri": "osys://plugin/catalog",
         "name": "plugin-catalog",
         "description": "Catalog of whitelisted MCP plugins",
@@ -288,6 +294,10 @@ def read_resource_uri(plugin, uri: str) -> Tuple[str, str]:
 
             payload = build_server_capabilities(plugin)
             return json.dumps(payload, ensure_ascii=False, indent=2), "application/json"
+        if key == "agent-guidelines":
+            from plugins.MCPServer.mcp.agent_guidelines import get_agent_guidelines
+
+            return get_agent_guidelines(plugin), "text/markdown"
         raise ValueError(f"Unsupported server resource: {key}")
 
     if host == "task-runtime":

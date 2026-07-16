@@ -334,10 +334,13 @@ class MCPServer(BasePlugin):
 
     def _dispatch_method(self, method: str, params: dict) -> dict:
         if method == "initialize":
+            from plugins.MCPServer.mcp.agent_guidelines import get_agent_guidelines
+
             return {
                 "protocolVersion": self._PROTOCOL_VERSION,
                 "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
                 "serverInfo": {"name": "osysHome MCP Server", "version": str(self.version)},
+                "instructions": get_agent_guidelines(self),
             }
         if method == "ping":
             return {}

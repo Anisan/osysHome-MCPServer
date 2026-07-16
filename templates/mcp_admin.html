@@ -310,7 +310,13 @@
       </p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <button type="button" class="btn btn-outline-secondary btn-sm" id="mcpCopyEndpoint" title="Copy endpoint URL">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        id="mcpCopyEndpoint"
+        data-endpoint="{{ endpoint }}"
+        title="Copy endpoint URL"
+      >
         <i class="fas fa-copy me-1"></i>Copy endpoint
       </button>
       <a class="btn btn-outline-primary btn-sm" href="/api/mcp" target="_blank" rel="noopener">
@@ -877,7 +883,6 @@
   var toggleTokenBtn = document.getElementById('mcpToggleToken');
   var generateTokenBtn = document.getElementById('mcpGenerateToken');
   var copyEndpointBtn = document.getElementById('mcpCopyEndpoint');
-  var endpointEl = document.getElementById('mcpEndpoint');
   var permCountEl = document.getElementById('mcpPermCount');
   var pluginCountEl = document.getElementById('mcpPluginCount');
   var sectionNav = document.getElementById('mcpSectionNav');
@@ -1106,9 +1111,10 @@
     });
   }
 
-  if (copyEndpointBtn && endpointEl) {
+  if (copyEndpointBtn) {
     copyEndpointBtn.addEventListener('click', function () {
-      var url = window.location.origin + endpointEl.textContent.trim();
+      var path = (copyEndpointBtn.getAttribute('data-endpoint') || '/api/mcp').trim();
+      var url = window.location.origin + path;
       copyText(url).then(function () {
         var original = copyEndpointBtn.innerHTML;
         copyEndpointBtn.innerHTML = '<i class="fas fa-check me-1"></i>Copied';
