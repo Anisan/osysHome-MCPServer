@@ -111,7 +111,14 @@ def _instance_mcp_capabilities(instance) -> dict:
         return {}
     try:
         return instance.mcp_capabilities() or {}
-    except Exception:
+    except Exception as exc:
+        plugin_name = getattr(instance, "name", None) or type(instance).__name__
+        _logger = getattr(instance, "logger", None)
+        if _logger is not None:
+            _logger.exception("mcp_capabilities failed for %s: %s", plugin_name, exc)
+        else:
+            from app.logging_config import getLogger
+            getLogger("MCPServer").exception("mcp_capabilities failed for %s: %s", plugin_name, exc)
         return {}
 
 
