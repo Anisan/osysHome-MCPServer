@@ -17,6 +17,7 @@ from jinja2 import Environment, TemplateSyntaxError, meta
 
 from app.core.main.BasePlugin import BasePlugin
 from app.core.lib.constants import PropertyType
+from app.core.lib.execute import compile_method_code
 from app.logging_config import security_audit_log
 from app.core.lib.object import (
     addClass,
@@ -70,7 +71,7 @@ class MCPServer(BasePlugin):
         self.title = "MCP Server"
         self.description = "Model Context Protocol endpoint for osysHome"
         self.category = "System"
-        self.version = 1
+        self.version = 2
 
         changed = False
         defaults = {
@@ -903,7 +904,8 @@ class MCPServer(BasePlugin):
         }
 
         try:
-            exec(prepared_code, runtime, runtime)
+            code_obj = compile_method_code(prepared_code, "<method-dry-run>")
+            exec(code_obj, runtime, runtime)
             return {
                 "ok": True,
                 "object_name": object_name,
@@ -995,29 +997,11 @@ class MCPServer(BasePlugin):
 
     @staticmethod
     def _validate_exec_method_code(code: str) -> None:
-        """
-        Methods in this platform are executed via exec as a plain code block.
-        `return` is invalid at top level and leads to SyntaxError.
-        """
+        """Syntax-check method code (top-level ``return`` is allowed at runtime)."""
         try:
-            tree = ast.parse(code or "")
+            ast.parse(code or "")
         except SyntaxError as ex:
             raise ValueError(f"Invalid Python code: {ex}") from ex
-
-        class ReturnVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.has_return = False
-
-            def visit_Return(self, node):
-                self.has_return = True
-
-        visitor = ReturnVisitor()
-        visitor.visit(tree)
-        if visitor.has_return:
-            raise ValueError(
-                "Method code must not contain 'return'. "
-                "Code is executed via exec as a block."
-            )
 
     def _is_authorized(self, req) -> bool:
         token = (self.config.get("auth_token") or "").strip()

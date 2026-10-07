@@ -182,7 +182,7 @@ Supported for direct read:
 Method code is executed as an `exec` block:
 
 - no function wrapper (`def`)
-- no `return`
+- early exit via `return` is allowed (runtime wraps top-level `return` before `exec`)
 - context variables include `self`, `params`, `source`
 - helper functions like `getProperty`, `setProperty`, `callMethod` are available
 

@@ -179,7 +179,7 @@ Read-only доступ к текстовым файлам в `app/` и `plugins/
 Код метода выполняется как `exec`-блок:
 
 - без обертки `def`
-- без `return`
+- ранний выход через `return` разрешён (рантайм оборачивает top-level `return` перед `exec`)
 - доступны `self`, `params`, `source`
 - доступны helper-функции вроде `getProperty`, `setProperty`, `callMethod`
 

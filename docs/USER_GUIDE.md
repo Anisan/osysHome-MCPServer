@@ -164,7 +164,7 @@ Pattern:
 Method code runs via `exec`:
 
 - no `def` wrapper
-- no `return`
+- early exit via `return` is allowed
 - no markdown fences
 
 ## PowerShell check

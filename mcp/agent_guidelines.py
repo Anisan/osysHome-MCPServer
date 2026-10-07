@@ -26,7 +26,7 @@ Rules for AI clients working through MCPServer (`/api/mcp`).
 ## Method and task code
 
 - Before authoring: read `osys://method-runtime/spec` (and examples/symbols).
-- Method code is a plain `exec` block: no `def`, no `return`.
+- Method code is a plain `exec` block: no `def`; early exit via `return` is allowed.
 - Validate with `osys_validate_method_code`, then `osys_run_method_dry`.
 - Tasks/cron: `osys://task-runtime/*`, `osys://cron/spec`.
 

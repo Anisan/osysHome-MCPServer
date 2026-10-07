@@ -26,7 +26,7 @@ def method_runtime_context_payload() -> dict:
         },
         "required_format": {
             "function_wrapper": "forbidden",
-            "return_statement": "forbidden",
+            "return_statement": "allowed",
             "markdown_fences": "forbidden",
         },
         "available_variables": {

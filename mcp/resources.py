@@ -113,7 +113,7 @@ PROMPT_DEFINITIONS = [
     },
     {
         "name": "osys_method_authoring",
-        "description": "Generate method code for osysHome exec runtime (no def/return)",
+        "description": "Generate method code for osysHome exec runtime (no def wrapper)",
         "arguments": [
             {"name": "task", "required": True},
             {"name": "object_name", "required": False},
@@ -250,7 +250,7 @@ def read_resource_uri(plugin, uri: str) -> Tuple[str, str]:
                 "notes": [
                     "Method code is executed as a plain exec block",
                     "Do not use function wrapper (def ...)",
-                    "Do not use return",
+                    "Early exit via return is allowed (runtime wraps top-level return)",
                     "Use self/params/source and imported helpers like setProperty/getProperty",
                 ],
                 "examples": [
@@ -307,7 +307,7 @@ def read_resource_uri(plugin, uri: str) -> Tuple[str, str]:
                 "engine": "exec",
                 "context": ["params", "logger", "source"],
                 "helpers": ["setProperty", "getProperty", "callMethod", "addCronJob", "removeCronJob"],
-                "constraints": ["no async", "no return", "thread-pool execution"],
+                "constraints": ["no async", "thread-pool execution"],
             }
             return json.dumps(payload, ensure_ascii=False, indent=2), "application/json"
         if key == "examples":

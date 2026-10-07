@@ -164,7 +164,7 @@ Update API принимает `if_match`, чтобы защитить от за�
 Код методов исполняется через `exec`:
 
 - без `def` wrapper
-- без `return`
+- ранний выход через `return` разрешён
 - без markdown fences
 
 ## Проверка через PowerShell
